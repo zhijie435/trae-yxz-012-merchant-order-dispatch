@@ -194,27 +194,27 @@ defineExpose({
   .status-filter {
     padding: 0 12px;
   }
-  
+
   .filter-tabs {
     gap: 4px;
   }
-  
+
   .filter-tab {
     padding: 16px 18px;
     gap: 8px;
   }
-  
+
   .tab-label {
     font-size: 15px;
   }
-  
+
   .tab-count {
     min-width: 22px;
     height: 22px;
     padding: 0 7px;
     font-size: 12px;
   }
-  
+
   .filter-tab.active::after {
     width: calc(100% - 36px);
   }
@@ -224,11 +224,11 @@ defineExpose({
   .status-filter {
     padding: 0 16px;
   }
-  
+
   .filter-tab {
     padding: 16px 22px;
   }
-  
+
   .filter-tab.active::after {
     width: calc(100% - 44px);
   }
