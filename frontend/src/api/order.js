@@ -18,9 +18,9 @@ request.interceptors.response.use(
   }
 );
 
-export const getOrderList = (status) => {
+export const getOrderList = (status, orderType = 'all') => {
   return request.get('/orders', {
-    params: { status }
+    params: { status, orderType }
   });
 };
 
@@ -28,6 +28,12 @@ export const getOrderStatistics = () => {
   return request.get('/orders/statistics');
 };
 
-export const getStatusConfig = () => {
-  return request.get('/status/config');
+export const getStatusConfig = (orderType = 'all') => {
+  return request.get('/status/config', {
+    params: { orderType }
+  });
+};
+
+export const getOrderTypes = () => {
+  return request.get('/order-types');
 };

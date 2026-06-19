@@ -1,10 +1,15 @@
 <template>
   <div class="order-list-container">
     <StatusFilter v-model="currentStatus" @change="handleStatusChange" ref="statusFilterRef" />
-    
+
     <div class="order-content">
       <div class="order-header">
         <div class="header-left">
+          <el-radio-group v-model="orderType" size="default" class="order-type-toggle" @change="handleTypeChange">
+            <el-radio-button label="all">全部</el-radio-button>
+            <el-radio-button label="rent">租赁订单</el-radio-button>
+            <el-radio-button label="sale">销售订单</el-radio-button>
+          </el-radio-group>
           <el-input
             v-model="searchKeyword"
             placeholder="搜索订单号、客户名称、商品名称"
@@ -45,62 +50,46 @@
               style="width: 100%"
               :empty-text="emptyText"
             >
-              <el-table-column prop="id" label="订单号" width="180" />
-              <el-table-column prop="customerName" label="客户姓名" width="120" />
-              <el-table-column prop="phone" label="联系电话" width="140" />
-              <el-table-column prop="product" label="租赁商品" min-width="180" />
-              <el-table-column prop="amount" label="订单金额" width="120">
+              <el-table-column label="订单类型" width="100">
+                <template #default="{ row }">
+                  <el-tag v-if="row.orderType === 'rent'" type="success" effect="plain" size="small">租赁</el-tag>
+                  <el-tag v-else type="warning" effect="plain" size="small">销售</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="id" label="订单号" width="170" />
+              <el-table-column prop="customerName" label="客户姓名" width="110" />
+              <el-table-column prop="phone" label="联系电话" width="130" />
+              <el-table-column prop="product" label="商品" min-width="160" />
+              <el-table-column label="数量" width="80" align="center">
+                <template #default="{ row }">x{{ row.quantity }}</template>
+              </el-table-column>
+              <el-table-column prop="amount" label="订单金额" width="110">
                 <template #default="{ row }">
                   <span class="amount">¥{{ row.amount.toFixed(2) }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="statusLabel" label="订单状态" width="120">
+              <el-table-column prop="statusLabel" label="订单状态" width="100">
                 <template #default="{ row }">
-                  <el-tag :color="row.statusColor" effect="light">
+                  <el-tag :color="row.statusColor" effect="light" size="small">
                     {{ row.statusLabel }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="deliverTime" label="交付时间" width="180" />
-              <el-table-column prop="address" label="交付地址" min-width="200" show-overflow-tooltip />
               <el-table-column label="操作" width="180" fixed="right">
                 <template #default="{ row }">
                   <div class="action-buttons">
-                    <el-button
-                      v-if="row.status === 'pending_accept'"
-                      type="success"
-                      size="small"
-                      @click="handleAccept(row)"
-                    >
-                      接单
-                    </el-button>
-                    <el-button
-                      v-if="row.status === 'pending_assign'"
-                      type="primary"
-                      size="small"
-                      @click="handleAssign(row)"
-                    >
-                      指派
-                    </el-button>
-                    <el-button
-                      v-if="row.status === 'pending_deliver'"
-                      type="warning"
-                      size="small"
-                      @click="handleDeliver(row)"
-                    >
-                      发货
-                    </el-button>
-                    <el-button
-                      v-if="row.status === 'pending_return'"
-                      type="danger"
-                      size="small"
-                      @click="handleReturn(row)"
-                    >
-                      退租
-                    </el-button>
-                    <el-button size="small" @click="handleViewDetail(row)">
-                      详情
-                    </el-button>
+                    <template v-if="row.orderType === 'rent'">
+                      <el-button v-if="row.status === 'pending_accept'" type="success" size="small" @click="handleAccept(row)">接单</el-button>
+                      <el-button v-if="row.status === 'pending_assign'" type="primary" size="small" @click="handleAssign(row)">指派</el-button>
+                      <el-button v-if="row.status === 'pending_deliver'" type="warning" size="small" @click="handleDeliver(row)">发货</el-button>
+                      <el-button v-if="row.status === 'pending_return'" type="danger" size="small" @click="handleReturn(row)">退租</el-button>
+                    </template>
+                    <template v-else>
+                      <el-button v-if="row.status === 'pending_pay'" type="warning" size="small" @click="handleRemindPay(row)">催付</el-button>
+                      <el-button v-if="row.status === 'pending_ship'" type="primary" size="small" @click="handleSaleShip(row)">发货</el-button>
+                      <el-button v-if="row.status === 'shipped'" size="small" @click="handleTracking(row)">物流</el-button>
+                    </template>
+                    <el-button size="small" @click="handleViewDetail(row)">详情</el-button>
                   </div>
                 </template>
               </el-table-column>
@@ -113,16 +102,25 @@
             <el-empty :description="emptyText" />
           </div>
           <div v-else class="order-card-grid">
-            <OrderCard
-              v-for="order in filteredOrders"
-              :key="order.id"
-              :order="order"
-              @accept="handleAccept"
-              @assign="handleAssign"
-              @deliver="handleDeliver"
-              @return="handleReturn"
-              @view="handleViewDetail"
-            />
+            <template v-for="order in filteredOrders" :key="order.id">
+              <OrderCard
+                v-if="order.orderType === 'rent'"
+                :order="order"
+                @accept="handleAccept"
+                @assign="handleAssign"
+                @deliver="handleDeliver"
+                @return="handleReturn"
+                @view="handleViewDetail"
+              />
+              <SalesOrderCard
+                v-else
+                :order="order"
+                @remindPay="handleRemindPay"
+                @ship="handleSaleShip"
+                @tracking="handleTracking"
+                @view="handleViewDetail"
+              />
+            </template>
           </div>
         </template>
       </div>
@@ -140,9 +138,11 @@ import { ElMessage } from 'element-plus';
 import { Search, Refresh, List, Grid } from '@element-plus/icons-vue';
 import StatusFilter from './StatusFilter.vue';
 import OrderCard from './OrderCard.vue';
+import SalesOrderCard from './SalesOrderCard.vue';
 import { getOrderList } from '../api/order.js';
 
 const currentStatus = ref('all');
+const orderType = ref('all');
 const searchKeyword = ref('');
 const loading = ref(false);
 const orders = ref([]);
@@ -167,7 +167,7 @@ const emptyText = computed(() => {
 const loadOrderList = async () => {
   loading.value = true;
   try {
-    orders.value = await getOrderList(currentStatus.value);
+    orders.value = await getOrderList(currentStatus.value, orderType.value);
   } catch (error) {
     console.error('加载订单列表失败:', error);
     ElMessage.error('加载订单列表失败');
@@ -184,6 +184,10 @@ const refreshOrderList = () => {
 };
 
 const handleStatusChange = () => {
+  loadOrderList();
+};
+
+const handleTypeChange = () => {
   loadOrderList();
 };
 
@@ -209,6 +213,20 @@ const handleDeliver = (row) => {
 const handleReturn = (row) => {
   ElMessage.success(`已处理退租：${row.id}`);
   setTimeout(refreshOrderList, 1000);
+};
+
+const handleRemindPay = (row) => {
+  ElMessage.success(`已发送付款提醒：${row.id}`);
+  setTimeout(refreshOrderList, 1000);
+};
+
+const handleSaleShip = (row) => {
+  ElMessage.success(`已发货：${row.id}`);
+  setTimeout(refreshOrderList, 1000);
+};
+
+const handleTracking = (row) => {
+  ElMessage.info(`查看物流：${row.trackingNo || '暂无物流信息'}`);
 };
 
 const handleViewDetail = (row) => {
