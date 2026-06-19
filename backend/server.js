@@ -589,6 +589,13 @@ app.get('/api/status/config', (req, res) => {
     statusList = statusList.concat(saleStatuses);
   }
 
+  const seen = new Set();
+  statusList = statusList.filter(item => {
+    if (seen.has(item.key)) return false;
+    seen.add(item.key);
+    return true;
+  });
+
   statusList.unshift({ key: ORDER_STATUS.ALL, label: '全部', orderType: 'all' });
 
   res.json({

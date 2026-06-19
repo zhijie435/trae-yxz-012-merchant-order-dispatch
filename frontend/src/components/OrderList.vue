@@ -3,6 +3,7 @@
     <StatusFilter
       v-model="currentStatus"
       :role="role"
+      :order-type="orderType"
       :employee-id="role === 'employee' && currentEmployee ? currentEmployee.id : ''"
       @change="handleStatusChange"
       ref="statusFilterRef"

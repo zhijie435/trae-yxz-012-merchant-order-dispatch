@@ -31,6 +31,10 @@ const props = defineProps({
     type: String,
     default: 'store'
   },
+  orderType: {
+    type: String,
+    default: 'all'
+  },
   employeeId: {
     type: String,
     default: ''
@@ -72,9 +76,15 @@ watch(() => props.role, () => {
   loadStatusConfig();
 });
 
+watch(() => props.orderType, () => {
+  currentStatus.value = 'all';
+  loadStatusConfig();
+});
+
 const loadStatusConfig = async () => {
   try {
-    statusList.value = await getStatusConfig('all', props.role);
+    statusList.value = await getStatusConfig(props.orderType, props.role);
+    currentStatus.value = 'all';
   } catch (error) {
     console.error('加载状态配置失败:', error);
     const baseList = [
