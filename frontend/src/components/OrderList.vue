@@ -3,6 +3,7 @@
     <StatusFilter
       v-model="currentStatus"
       :role="role"
+      :employee-id="role === 'employee' && currentEmployee ? currentEmployee.id : ''"
       @change="handleStatusChange"
       ref="statusFilterRef"
     />
@@ -10,11 +11,12 @@
     <div class="order-content">
       <div class="order-header">
         <div class="header-left">
-          <el-radio-group v-model="orderType" size="default" class="order-type-toggle" @change="handleTypeChange">
+          <el-radio-group v-if="role !== 'employee'" v-model="orderType" size="default" class="order-type-toggle" @change="handleTypeChange">
             <el-radio-button label="all">全部</el-radio-button>
             <el-radio-button label="rent">租赁订单</el-radio-button>
             <el-radio-button label="sale">销售订单</el-radio-button>
           </el-radio-group>
+          <span v-else class="employee-task-label">我的租赁任务</span>
           <el-input
             v-model="searchKeyword"
             placeholder="搜索订单号、客户名称、商品名称"
@@ -126,12 +128,28 @@
                         换员工
                       </el-button>
                       <el-button
+                        v-if="role === 'employee' && row.status === 'pending_deliver'"
+                        type="warning"
+                        size="small"
+                        @click="handleDeliver(row)"
+                      >
+                        发货
+                      </el-button>
+                      <el-button
                         v-if="role === 'store' && row.status === 'pending_deliver'"
                         type="warning"
                         size="small"
                         @click="handleDeliver(row)"
                       >
                         发货
+                      </el-button>
+                      <el-button
+                        v-if="role === 'employee' && row.status === 'pending_return'"
+                        type="danger"
+                        size="small"
+                        @click="handleReturn(row)"
+                      >
+                        退租
                       </el-button>
                       <el-button
                         v-if="role === 'store' && row.status === 'pending_return'"
@@ -194,7 +212,7 @@
                 @hqCancel="handleHqCancel"
               />
               <SalesOrderCard
-                v-else
+                v-if="order.orderType === 'sale' && role !== 'employee'"
                 :order="order"
                 @remindPay="handleRemindPay"
                 @ship="handleSaleShip"
@@ -491,6 +509,10 @@ const props = defineProps({
   currentStore: {
     type: Object,
     default: null
+  },
+  currentEmployee: {
+    type: Object,
+    default: null
   }
 });
 
@@ -568,7 +590,8 @@ const emptyText = computed(() => {
 const loadOrderList = async () => {
   loading.value = true;
   try {
-    orders.value = await getOrderList(currentStatus.value, orderType.value);
+    const employeeId = props.role === 'employee' && props.currentEmployee ? props.currentEmployee.id : '';
+    orders.value = await getOrderList(currentStatus.value, orderType.value, employeeId);
   } catch (error) {
     console.error('加载订单列表失败:', error);
     ElMessage.error('加载订单列表失败');
@@ -609,7 +632,16 @@ const handleSearch = () => {
 
 watch(() => props.role, () => {
   currentStatus.value = 'all';
+  if (props.role === 'employee') {
+    orderType.value = 'rent';
+  }
   loadOrderList();
+});
+
+watch(() => props.currentEmployee, (newVal) => {
+  if (props.role === 'employee' && newVal) {
+    loadOrderList();
+  }
 });
 
 const handleAccept = async (row) => {
@@ -858,6 +890,16 @@ onMounted(() => {
 
 .toggle-text {
   font-size: 14px;
+}
+
+.employee-task-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #667eea;
+  background: linear-gradient(135deg, #f0f3ff 0%, #f5f0ff 100%);
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid #dcd9ff;
 }
 
 .order-body {

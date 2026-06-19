@@ -204,7 +204,7 @@
           指派员工
         </el-button>
         <el-button
-          v-if="role === 'store' && order.status === 'pending_deliver'"
+          v-if="(role === 'store' || role === 'employee') && order.status === 'pending_deliver'"
           type="warning"
           size="small"
           @click="$emit('deliver', order)"
@@ -212,7 +212,7 @@
           发货
         </el-button>
         <el-button
-          v-if="role === 'store' && order.status === 'pending_return'"
+          v-if="(role === 'store' || role === 'employee') && order.status === 'pending_return'"
           type="danger"
           size="small"
           @click="$emit('return', order)"

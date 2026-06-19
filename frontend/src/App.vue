@@ -5,11 +5,15 @@
         <div class="header-left">
           <h1 class="app-title">订单管理系统</h1>
           <span class="app-subtitle">
-            {{ currentRole === 'hq' ? '总部端 - 订单调度中心' : '门店端 - 订单接单指派' }}
+            {{ currentRole === 'hq' ? '总部端 - 订单调度中心' : currentRole === 'employee' ? '员工端 - 我的任务' : '门店端 - 订单接单指派' }}
           </span>
           <span v-if="currentStore && currentRole === 'store'" class="store-tag">
             <el-icon><OfficeBuilding /></el-icon>
             {{ currentStore.name }}
+          </span>
+          <span v-if="currentEmployee && currentRole === 'employee'" class="store-tag">
+            <el-icon><Avatar /></el-icon>
+            {{ currentEmployee.name }} · {{ currentEmployee.storeName }}
           </span>
         </div>
         <div class="header-right">
@@ -17,6 +21,10 @@
             <el-radio-button label="store">
               <el-icon><Shop /></el-icon>
               <span class="toggle-text">门店端</span>
+            </el-radio-button>
+            <el-radio-button label="employee">
+              <el-icon><Avatar /></el-icon>
+              <span class="toggle-text">员工端</span>
             </el-radio-button>
             <el-radio-button label="hq">
               <el-icon><Aim /></el-icon>
@@ -27,19 +35,20 @@
       </div>
     </header>
     <main class="app-main">
-      <OrderList :role="currentRole" :currentStore="currentStore" />
+      <OrderList :role="currentRole" :currentStore="currentStore" :currentEmployee="currentEmployee" />
     </main>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { OfficeBuilding, Shop, Aim } from '@element-plus/icons-vue';
+import { OfficeBuilding, Shop, Aim, Avatar } from '@element-plus/icons-vue';
 import OrderList from './components/OrderList.vue';
-import { getCurrentStore } from './api/order.js';
+import { getCurrentStore, getCurrentEmployee } from './api/order.js';
 
 const currentRole = ref('store');
 const currentStore = ref(null);
+const currentEmployee = ref(null);
 
 const loadCurrentStore = async () => {
   try {
@@ -49,12 +58,20 @@ const loadCurrentStore = async () => {
   }
 };
 
+const loadCurrentEmployee = async () => {
+  try {
+    currentEmployee.value = await getCurrentEmployee();
+  } catch (e) {
+    console.error('获取员工信息失败', e);
+  }
+};
+
 const handleRoleChange = () => {
-  // role change is reactive, OrderList will re-fetch
 };
 
 onMounted(() => {
   loadCurrentStore();
+  loadCurrentEmployee();
 });
 </script>
 
@@ -117,7 +134,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 18px;
+  padding: 8px 14px;
   background: rgba(255, 255, 255, 0.12);
   border: none;
   color: rgba(255, 255, 255, 0.85);

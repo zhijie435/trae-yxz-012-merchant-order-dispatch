@@ -67,6 +67,7 @@ const mockEmployees = [
 ];
 
 const CURRENT_STORE_ID = 'STORE001';
+const CURRENT_EMPLOYEE_ID = 'EMP001';
 
 const mockRentOrders = [
   {
@@ -474,7 +475,7 @@ const getStatusInfo = (order) => {
 };
 
 app.get('/api/orders', (req, res) => {
-  const { status, orderType } = req.query;
+  const { status, orderType, employeeId } = req.query;
   
   let orders = mockOrders.map(order => {
     const statusInfo = getStatusInfo(order);
@@ -493,6 +494,10 @@ app.get('/api/orders', (req, res) => {
     orders = orders.filter(order => order.status === status);
   }
 
+  if (employeeId) {
+    orders = orders.filter(order => order.assignedEmployee && order.assignedEmployee.id === employeeId);
+  }
+
   res.json({
     code: 0,
     message: 'success',
@@ -501,11 +506,21 @@ app.get('/api/orders', (req, res) => {
 });
 
 app.get('/api/orders/statistics', (req, res) => {
-  const rentOrders = mockOrders.filter(o => o.orderType === ORDER_TYPE.RENT);
-  const saleOrders = mockOrders.filter(o => o.orderType === ORDER_TYPE.SALE);
+  const { employeeId } = req.query;
+  let rentOrders = mockOrders.filter(o => o.orderType === ORDER_TYPE.RENT);
+  let saleOrders = mockOrders.filter(o => o.orderType === ORDER_TYPE.SALE);
+
+  if (employeeId) {
+    rentOrders = rentOrders.filter(o => o.assignedEmployee && o.assignedEmployee.id === employeeId);
+    saleOrders = saleOrders.filter(o => o.assignedEmployee && o.assignedEmployee.id === employeeId);
+  }
+
+  const myOrders = employeeId
+    ? mockOrders.filter(o => o.assignedEmployee && o.assignedEmployee.id === employeeId)
+    : mockOrders;
   
   const statistics = {
-    all: mockOrders.length,
+    all: myOrders.length,
     rent_all: rentOrders.length,
     sale_all: saleOrders.length,
     pending_accept: rentOrders.filter(o => o.status === ORDER_STATUS.PENDING_ACCEPT).length,
@@ -518,7 +533,7 @@ app.get('/api/orders/statistics', (req, res) => {
     pending_ship: saleOrders.filter(o => o.status === ORDER_STATUS.PENDING_SHIP).length,
     shipped: saleOrders.filter(o => o.status === ORDER_STATUS.SHIPPED).length,
     completed: saleOrders.filter(o => o.status === ORDER_STATUS.COMPLETED).length,
-    cancelled: mockOrders.filter(o => o.status === ORDER_STATUS.CANCELLED).length
+    cancelled: myOrders.filter(o => o.status === ORDER_STATUS.CANCELLED).length
   };
 
   res.json({
@@ -532,6 +547,21 @@ app.get('/api/status/config', (req, res) => {
   const { orderType = 'all', role = 'store' } = req.query;
   
   let statusList = [];
+  
+  if (role === 'employee') {
+    const employeeStatuses = [
+      { key: ORDER_STATUS.ALL, label: '全部', orderType: 'all' },
+      { key: ORDER_STATUS.PENDING_DELIVER, label: '待交付', orderType: ORDER_TYPE.RENT },
+      { key: ORDER_STATUS.RENTING, label: '租赁中', orderType: ORDER_TYPE.RENT },
+      { key: ORDER_STATUS.PENDING_RETURN, label: '待退租', orderType: ORDER_TYPE.RENT },
+      { key: ORDER_STATUS.COMPLETED, label: '已完成', orderType: ORDER_TYPE.RENT }
+    ];
+    return res.json({
+      code: 0,
+      message: 'success',
+      data: employeeStatuses
+    });
+  }
   
   if (orderType === 'all' || orderType === ORDER_TYPE.RENT) {
     const rentStatuses = [
@@ -596,6 +626,19 @@ app.get('/api/current-store', (req, res) => {
     code: 0,
     message: 'success',
     data: store
+  });
+});
+
+app.get('/api/current-employee', (req, res) => {
+  const employee = mockEmployees.find(e => e.id === CURRENT_EMPLOYEE_ID);
+  if (!employee) {
+    return res.json({ code: 1, message: '员工不存在' });
+  }
+  const store = mockStores.find(s => s.id === employee.storeId);
+  res.json({
+    code: 0,
+    message: 'success',
+    data: { ...employee, storeName: store ? store.name : '' }
   });
 });
 

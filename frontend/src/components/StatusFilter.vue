@@ -30,6 +30,10 @@ const props = defineProps({
   role: {
     type: String,
     default: 'store'
+  },
+  employeeId: {
+    type: String,
+    default: ''
   }
 });
 
@@ -91,7 +95,7 @@ const loadStatusConfig = async () => {
 
 const loadStatistics = async () => {
   try {
-    statistics.value = await getOrderStatistics();
+    statistics.value = await getOrderStatistics(props.employeeId);
   } catch (error) {
     console.error('加载统计数据失败:', error);
   }

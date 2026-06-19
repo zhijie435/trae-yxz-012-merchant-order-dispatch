@@ -18,14 +18,16 @@ request.interceptors.response.use(
   }
 );
 
-export const getOrderList = (status, orderType = 'all') => {
+export const getOrderList = (status, orderType = 'all', employeeId = '') => {
   return request.get('/orders', {
-    params: { status, orderType }
+    params: { status, orderType, employeeId }
   });
 };
 
-export const getOrderStatistics = () => {
-  return request.get('/orders/statistics');
+export const getOrderStatistics = (employeeId = '') => {
+  return request.get('/orders/statistics', {
+    params: employeeId ? { employeeId } : {}
+  });
 };
 
 export const getStatusConfig = (orderType = 'all', role = 'store') => {
@@ -82,4 +84,8 @@ export const deliverOrder = (orderId) => {
 
 export const returnOrder = (orderId) => {
   return request.post(`/orders/${orderId}/return`);
+};
+
+export const getCurrentEmployee = () => {
+  return request.get('/current-employee');
 };
