@@ -21,7 +21,9 @@ const ORDER_STATUS = {
   PENDING_PAY: 'pending_pay',
   PENDING_SHIP: 'pending_ship',
   SHIPPED: 'shipped',
-  COMPLETED: 'completed'
+  COMPLETED: 'completed',
+  ESCALATED_TO_HQ: 'escalated_to_hq',
+  CANCELLED: 'cancelled'
 };
 
 const RENT_STATUS_MAP = {
@@ -29,15 +31,26 @@ const RENT_STATUS_MAP = {
   [ORDER_STATUS.PENDING_ASSIGN]: { label: '待指派', color: '#1890ff' },
   [ORDER_STATUS.PENDING_DELIVER]: { label: '待交付', color: '#722ed1' },
   [ORDER_STATUS.RENTING]: { label: '租赁中', color: '#52c41a' },
-  [ORDER_STATUS.PENDING_RETURN]: { label: '待退租', color: '#f5222d' }
+  [ORDER_STATUS.PENDING_RETURN]: { label: '待退租', color: '#f5222d' },
+  [ORDER_STATUS.ESCALATED_TO_HQ]: { label: '待总部处理', color: '#eb2f96' },
+  [ORDER_STATUS.CANCELLED]: { label: '已取消', color: '#8c8c8c' }
 };
 
 const SALE_STATUS_MAP = {
   [ORDER_STATUS.PENDING_PAY]: { label: '待付款', color: '#fa8c16' },
   [ORDER_STATUS.PENDING_SHIP]: { label: '待发货', color: '#1890ff' },
   [ORDER_STATUS.SHIPPED]: { label: '已发货', color: '#722ed1' },
-  [ORDER_STATUS.COMPLETED]: { label: '已完成', color: '#52c41a' }
+  [ORDER_STATUS.COMPLETED]: { label: '已完成', color: '#52c41a' },
+  [ORDER_STATUS.CANCELLED]: { label: '已取消', color: '#8c8c8c' }
 };
+
+const mockStores = [
+  { id: 'STORE001', name: '北京朝阳门店', contact: '王经理', phone: '138****1111' },
+  { id: 'STORE002', name: '北京海淀门店', contact: '李经理', phone: '138****2222' },
+  { id: 'STORE003', name: '上海浦东门店', contact: '张经理', phone: '138****3333' },
+  { id: 'STORE004', name: '广州天河门店', contact: '刘经理', phone: '138****4444' },
+  { id: 'STORE005', name: '深圳南山门店', contact: '陈经理', phone: '138****5555' }
+];
 
 const mockRentOrders = [
   {
@@ -436,10 +449,12 @@ app.get('/api/orders/statistics', (req, res) => {
     pending_deliver: rentOrders.filter(o => o.status === ORDER_STATUS.PENDING_DELIVER).length,
     renting: rentOrders.filter(o => o.status === ORDER_STATUS.RENTING).length,
     pending_return: rentOrders.filter(o => o.status === ORDER_STATUS.PENDING_RETURN).length,
+    escalated_to_hq: rentOrders.filter(o => o.status === ORDER_STATUS.ESCALATED_TO_HQ).length,
     pending_pay: saleOrders.filter(o => o.status === ORDER_STATUS.PENDING_PAY).length,
     pending_ship: saleOrders.filter(o => o.status === ORDER_STATUS.PENDING_SHIP).length,
     shipped: saleOrders.filter(o => o.status === ORDER_STATUS.SHIPPED).length,
-    completed: saleOrders.filter(o => o.status === ORDER_STATUS.COMPLETED).length
+    completed: saleOrders.filter(o => o.status === ORDER_STATUS.COMPLETED).length,
+    cancelled: mockOrders.filter(o => o.status === ORDER_STATUS.CANCELLED).length
   };
 
   res.json({
