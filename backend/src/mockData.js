@@ -19,7 +19,14 @@ const mockEmployees = [
   { id: 'EMP008', storeId: 'STORE004', name: '陈超', phone: '136****4001', role: '配送安装工', status: 'available' },
   { id: 'EMP009', storeId: 'STORE004', name: '褚鹏', phone: '136****4002', role: '配送安装工', status: 'available' },
   { id: 'EMP010', storeId: 'STORE005', name: '卫东', phone: '136****5001', role: '配送安装工', status: 'available' },
-  { id: 'EMP011', storeId: 'STORE005', name: '蒋勇', phone: '136****5002', role: '配送安装工', status: 'busy' }
+  { id: 'EMP011', storeId: 'STORE005', name: '蒋勇', phone: '136****5002', role: '配送安装工', status: 'busy' },
+  { id: 'STORE001-MGR', storeId: 'STORE001', name: '王经理', phone: '138****1111', role: '门店店长', status: 'available' },
+  { id: 'STORE002-MGR', storeId: 'STORE002', name: '李经理', phone: '138****2222', role: '门店店长', status: 'available' },
+  { id: 'STORE003-MGR', storeId: 'STORE003', name: '张经理', phone: '138****3333', role: '门店店长', status: 'available' },
+  { id: 'STORE004-MGR', storeId: 'STORE004', name: '刘经理', phone: '138****4444', role: '门店店长', status: 'available' },
+  { id: 'STORE005-MGR', storeId: 'STORE005', name: '陈经理', phone: '138****5555', role: '门店店长', status: 'available' },
+  { id: 'HQ001', storeId: null, name: '总部调度员', phone: '130****0001', role: '总部管理员', status: 'available' },
+  { id: 'HQ002', storeId: null, name: '总部运营主管', phone: '130****0002', role: '总部管理员', status: 'available' }
 ];
 
 const CURRENT_STORE_ID = 'STORE001';
@@ -270,6 +277,79 @@ const mockRentOrders = [
     assignHistory: [{ id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2024-12-19 10:00:00', action: '初次指派' }],
     escalateReason: '',
     rejectReason: ''
+  },
+  {
+    id: 'ORD2025010011',
+    orderType: ORDER_TYPE.RENT,
+    customerName: '褚十三',
+    phone: '129****1111',
+    product: '高端笔记本电脑租赁',
+    productSpec: 'ThinkPad X1 Carbon Gen11 i7/32GB/1TB',
+    quantity: 3,
+    amount: 899,
+    deposit: 9000,
+    monthlyRent: 899,
+    rentPeriod: '2025-01-18 至 2025-03-18',
+    deliverTime: '2025-01-18 10:00-12:00',
+    returnTime: '',
+    status: ORDER_STATUS.REJECTED,
+    createTime: '2025-01-15 08:00:00',
+    address: '北京市朝阳区建外大街甲6号SK大厦15层',
+    contact: '褚十三',
+    storeId: 'STORE001',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: '',
+    rejectReason: '该型号库存不足，无法满足客户需求'
+  },
+  {
+    id: 'ORD2025010012',
+    orderType: ORDER_TYPE.RENT,
+    customerName: '卫十四',
+    phone: '128****2222',
+    product: '企业级服务器租赁',
+    productSpec: 'Dell PowerEdge R750 双路至强/256GB/8*4TB',
+    quantity: 2,
+    amount: 4999,
+    deposit: 30000,
+    monthlyRent: 4999,
+    rentPeriod: '2025-01-22 至 2025-07-22',
+    deliverTime: '2025-01-22 09:00-11:00',
+    returnTime: '',
+    status: ORDER_STATUS.ESCALATED_TO_HQ,
+    createTime: '2025-01-15 13:00:00',
+    address: '北京市海淀区西二旗中关村软件园二期9号楼',
+    contact: '卫十四',
+    storeId: 'STORE001',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: '客户要求次日达配送时间与门店运力冲突，需要总部协调其他门店支援',
+    rejectReason: ''
+  },
+  {
+    id: 'ORD2025010013',
+    orderType: ORDER_TYPE.RENT,
+    customerName: '蒋十五',
+    phone: '127****3333',
+    product: '临时活动桌椅租赁',
+    productSpec: '培训桌椅100套（含桌+椅',
+    quantity: 100,
+    amount: 4999,
+    deposit: 5000,
+    monthlyRent: 4999,
+    rentPeriod: '2025-01-15 至 2025-01-16',
+    deliverTime: '2025-01-15 08:00-10:00',
+    returnTime: '2025-01-16 18:00-20:00',
+    status: ORDER_STATUS.CANCELLED,
+    createTime: '2025-01-10 15:00:00',
+    address: '北京市朝阳区奥林匹克公园国家会议中心',
+    contact: '蒋十五',
+    storeId: 'STORE001',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: '',
+    rejectReason: '',
+    cancelReason: '客户活动取消'
   }
 ];
 
@@ -433,6 +513,27 @@ const mockSaleOrders = [
     contact: '郑总',
     remark: '三台分别安装在前台、数据中心出入口、办公区入口',
     storeId: 'STORE001'
+  },
+  {
+    id: 'SAL2025010009',
+    orderType: ORDER_TYPE.SALE,
+    customerName: '韩总',
+    phone: '130****9999',
+    product: '智能办公投影系统',
+    productSpec: '极米RS Pro 3 4K激光电视 + 120寸抗光幕布',
+    quantity: 1,
+    amount: 28999,
+    unitPrice: 28999,
+    payTime: '2025-01-10 11:00:00',
+    shipTime: '',
+    trackingNo: '',
+    status: ORDER_STATUS.CANCELLED,
+    createTime: '2025-01-10 09:30:00',
+    address: '杭州市西湖区文三路478号华星时代广场25楼',
+    contact: '韩总',
+    remark: '',
+    storeId: 'STORE001',
+    cancelReason: '客户选择其他品牌产品'
   }
 ];
 

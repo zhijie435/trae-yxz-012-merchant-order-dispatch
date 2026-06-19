@@ -247,24 +247,24 @@ describe('OrderService - 订单服务', () => {
   describe('filterOrders - 订单筛选功能', () => {
     test('不带筛选条件应该返回所有订单', () => {
       const result = OrderService.filterOrders();
-      expect(result.length).toBe(18);
+      expect(result.length).toBe(22);
     });
 
     test('按订单类型筛选：租赁订单', () => {
       const result = OrderService.filterOrders({ orderType: ORDER_TYPE.RENT });
-      expect(result.length).toBe(10);
+      expect(result.length).toBe(13);
       expect(result.every(o => o.orderType === ORDER_TYPE.RENT)).toBe(true);
     });
 
     test('按订单类型筛选：销售订单', () => {
       const result = OrderService.filterOrders({ orderType: ORDER_TYPE.SALE });
-      expect(result.length).toBe(8);
+      expect(result.length).toBe(9);
       expect(result.every(o => o.orderType === ORDER_TYPE.SALE)).toBe(true);
     });
 
     test('按订单类型筛选：all 返回所有', () => {
       const result = OrderService.filterOrders({ orderType: 'all' });
-      expect(result.length).toBe(18);
+      expect(result.length).toBe(22);
     });
 
     test('按状态筛选：待接单', () => {
@@ -279,9 +279,27 @@ describe('OrderService - 订单服务', () => {
       expect(result.every(o => o.status === ORDER_STATUS.PENDING_ASSIGN)).toBe(true);
     });
 
+    test('按状态筛选：已拒单', () => {
+      const result = OrderService.filterOrders({ status: ORDER_STATUS.REJECTED });
+      expect(result.length).toBe(1);
+      expect(result.every(o => o.status === ORDER_STATUS.REJECTED)).toBe(true);
+    });
+
+    test('按状态筛选：待总部处理', () => {
+      const result = OrderService.filterOrders({ status: ORDER_STATUS.ESCALATED_TO_HQ });
+      expect(result.length).toBe(1);
+      expect(result.every(o => o.status === ORDER_STATUS.ESCALATED_TO_HQ)).toBe(true);
+    });
+
+    test('按状态筛选：已取消', () => {
+      const result = OrderService.filterOrders({ status: ORDER_STATUS.CANCELLED });
+      expect(result.length).toBe(2);
+      expect(result.every(o => o.status === ORDER_STATUS.CANCELLED)).toBe(true);
+    });
+
     test('按状态筛选：all 返回所有', () => {
       const result = OrderService.filterOrders({ status: ORDER_STATUS.ALL });
-      expect(result.length).toBe(18);
+      expect(result.length).toBe(22);
     });
 
     test('按员工ID筛选', () => {
@@ -384,18 +402,21 @@ describe('OrderService - 订单服务', () => {
     test('应该返回正确的统计数据', () => {
       const stats = OrderService.getOrderStatistics();
 
-      expect(stats.all).toBe(18);
-      expect(stats.rent_all).toBe(10);
-      expect(stats.sale_all).toBe(8);
+      expect(stats.all).toBe(22);
+      expect(stats.rent_all).toBe(13);
+      expect(stats.sale_all).toBe(9);
       expect(stats.pending_accept).toBe(2);
       expect(stats.pending_assign).toBe(2);
       expect(stats.pending_deliver).toBe(2);
       expect(stats.renting).toBe(2);
       expect(stats.pending_return).toBe(2);
+      expect(stats.escalated_to_hq).toBe(1);
+      expect(stats.rejected).toBe(1);
       expect(stats.pending_pay).toBe(2);
       expect(stats.pending_ship).toBe(2);
       expect(stats.shipped).toBe(2);
       expect(stats.completed).toBe(2);
+      expect(stats.cancelled).toBe(2);
     });
 
     test('按员工筛选统计', () => {
