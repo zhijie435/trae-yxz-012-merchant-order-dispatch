@@ -52,6 +52,22 @@ const mockStores = [
   { id: 'STORE005', name: '深圳南山门店', contact: '陈经理', phone: '138****5555' }
 ];
 
+const mockEmployees = [
+  { id: 'EMP001', storeId: 'STORE001', name: '赵明', phone: '136****1001', role: '配送安装工', status: 'available' },
+  { id: 'EMP002', storeId: 'STORE001', name: '钱伟', phone: '136****1002', role: '配送安装工', status: 'available' },
+  { id: 'EMP003', storeId: 'STORE001', name: '孙强', phone: '136****1003', role: '配送安装工', status: 'busy' },
+  { id: 'EMP004', storeId: 'STORE002', name: '周磊', phone: '136****2001', role: '配送安装工', status: 'available' },
+  { id: 'EMP005', storeId: 'STORE002', name: '吴涛', phone: '136****2002', role: '配送安装工', status: 'available' },
+  { id: 'EMP006', storeId: 'STORE003', name: '郑浩', phone: '136****3001', role: '配送安装工', status: 'available' },
+  { id: 'EMP007', storeId: 'STORE003', name: '冯杰', phone: '136****3002', role: '配送安装工', status: 'on_leave' },
+  { id: 'EMP008', storeId: 'STORE004', name: '陈超', phone: '136****4001', role: '配送安装工', status: 'available' },
+  { id: 'EMP009', storeId: 'STORE004', name: '褚鹏', phone: '136****4002', role: '配送安装工', status: 'available' },
+  { id: 'EMP010', storeId: 'STORE005', name: '卫东', phone: '136****5001', role: '配送安装工', status: 'available' },
+  { id: 'EMP011', storeId: 'STORE005', name: '蒋勇', phone: '136****5002', role: '配送安装工', status: 'busy' }
+];
+
+const CURRENT_STORE_ID = 'STORE001';
+
 const mockRentOrders = [
   {
     id: 'ORD2025010001',
@@ -70,7 +86,11 @@ const mockRentOrders = [
     status: ORDER_STATUS.PENDING_ACCEPT,
     createTime: '2025-01-15 10:30:00',
     address: '北京市朝阳区建国路88号SOHO现代城A座1501',
-    contact: '张三'
+    contact: '张三',
+    storeId: 'STORE001',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010002',
@@ -89,7 +109,11 @@ const mockRentOrders = [
     status: ORDER_STATUS.PENDING_ACCEPT,
     createTime: '2025-01-15 11:20:00',
     address: '上海市浦东新区陆家嘴环路1000号恒生银行大厦28层',
-    contact: '李四'
+    contact: '李四',
+    storeId: 'STORE003',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010003',
@@ -108,7 +132,11 @@ const mockRentOrders = [
     status: ORDER_STATUS.PENDING_ASSIGN,
     createTime: '2025-01-15 09:15:00',
     address: '广州市天河区珠江新城华夏路10号富力中心35楼',
-    contact: '王五'
+    contact: '王五',
+    storeId: 'STORE004',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010004',
@@ -127,7 +155,11 @@ const mockRentOrders = [
     status: ORDER_STATUS.PENDING_ASSIGN,
     createTime: '2025-01-14 16:45:00',
     address: '深圳市南山区科技园南路腾讯大厦12楼会议室',
-    contact: '赵六'
+    contact: '赵六',
+    storeId: 'STORE005',
+    assignedEmployee: null,
+    assignHistory: [],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010005',
@@ -145,8 +177,12 @@ const mockRentOrders = [
     returnTime: '',
     status: ORDER_STATUS.PENDING_DELIVER,
     createTime: '2025-01-14 14:30:00',
-    address: '杭州市西湖区文三路478号华星时代广场C座201',
-    contact: '孙七'
+    address: '北京市朝阳区建国路88号华星时代广场C座201',
+    contact: '孙七',
+    storeId: 'STORE001',
+    assignedEmployee: { id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-15 09:00:00' },
+    assignHistory: [{ id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-15 09:00:00', action: '初次指派' }],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010006',
@@ -164,8 +200,12 @@ const mockRentOrders = [
     returnTime: '',
     status: ORDER_STATUS.PENDING_DELIVER,
     createTime: '2025-01-13 10:00:00',
-    address: '成都市高新区天府大道天府软件园E区8栋3楼',
-    contact: '周八'
+    address: '北京市海淀区中关村大街1号软件园E区8栋3楼',
+    contact: '周八',
+    storeId: 'STORE002',
+    assignedEmployee: { id: 'EMP004', name: '周磊', phone: '136****2001', assignTime: '2025-01-14 10:30:00' },
+    assignHistory: [{ id: 'EMP004', name: '周磊', phone: '136****2001', assignTime: '2025-01-14 10:30:00', action: '初次指派' }],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010007',
@@ -183,8 +223,12 @@ const mockRentOrders = [
     returnTime: '',
     status: ORDER_STATUS.RENTING,
     createTime: '2025-01-10 08:00:00',
-    address: '武汉市东湖新技术开发区光谷金融港B15栋数据中心',
-    contact: '吴九'
+    address: '北京市朝阳区望京SOHO T3 B15栋数据中心',
+    contact: '吴九',
+    storeId: 'STORE001',
+    assignedEmployee: { id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2025-01-10 06:00:00' },
+    assignHistory: [{ id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2025-01-10 06:00:00', action: '初次指派' }],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010008',
@@ -202,8 +246,12 @@ const mockRentOrders = [
     returnTime: '',
     status: ORDER_STATUS.RENTING,
     createTime: '2025-01-05 15:30:00',
-    address: '南京市建邺区河西大街新城科技园A座18-20层',
-    contact: '郑十'
+    address: '北京市朝阳区建国门外大街1号国贸大厦A座18-20层',
+    contact: '郑十',
+    storeId: 'STORE001',
+    assignedEmployee: { id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-04 14:00:00' },
+    assignHistory: [{ id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-04 14:00:00', action: '初次指派' }],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010009',
@@ -221,8 +269,12 @@ const mockRentOrders = [
     returnTime: '2025-01-15 14:00-16:00',
     status: ORDER_STATUS.PENDING_RETURN,
     createTime: '2024-12-15 09:00:00',
-    address: '西安市高新区科技路38号林凯国际大厦1506',
-    contact: '冯十一'
+    address: '北京市海淀区西二旗大街38号林凯国际大厦1506',
+    contact: '冯十一',
+    storeId: 'STORE002',
+    assignedEmployee: { id: 'EMP005', name: '吴涛', phone: '136****2002', assignTime: '2024-12-14 16:00:00' },
+    assignHistory: [{ id: 'EMP005', name: '吴涛', phone: '136****2002', assignTime: '2024-12-14 16:00:00', action: '初次指派' }],
+    escalateReason: ''
   },
   {
     id: 'ORD2025010010',
@@ -240,8 +292,12 @@ const mockRentOrders = [
     returnTime: '2025-01-20 16:00-20:00',
     status: ORDER_STATUS.PENDING_RETURN,
     createTime: '2024-12-20 14:00:00',
-    address: '重庆市渝北区金开大道悦来国际博览中心N3馆',
-    contact: '陈十二'
+    address: '北京市朝阳区天辰东路7号国家会议中心N3馆',
+    contact: '陈十二',
+    storeId: 'STORE001',
+    assignedEmployee: { id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2024-12-19 10:00:00' },
+    assignHistory: [{ id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2024-12-19 10:00:00', action: '初次指派' }],
+    escalateReason: ''
   }
 ];
 
@@ -263,7 +319,8 @@ const mockSaleOrders = [
     createTime: '2025-01-14 10:15:00',
     address: '北京市海淀区中关村大街1号中科大厦B座2301',
     contact: '张总',
-    remark: '请安排本周五前送达，需专业安装人员到场组装'
+    remark: '请安排本周五前送达，需专业安装人员到场组装',
+    storeId: 'STORE002'
   },
   {
     id: 'SAL2025010002',
@@ -282,7 +339,8 @@ const mockSaleOrders = [
     createTime: '2025-01-15 09:45:00',
     address: '上海市徐汇区漕河泾开发区桂平路481号5号楼',
     contact: '李经理',
-    remark: '公司采购，需开具增值税专用发票'
+    remark: '公司采购，需开具增值税专用发票',
+    storeId: 'STORE003'
   },
   {
     id: 'SAL2025010003',
@@ -301,7 +359,8 @@ const mockSaleOrders = [
     createTime: '2025-01-12 10:00:00',
     address: '广州市天河区珠江新城珠江西路5号国际金融中心4105',
     contact: '王主管',
-    remark: '包含上门安装服务，请提前联系'
+    remark: '包含上门安装服务，请提前联系',
+    storeId: 'STORE004'
   },
   {
     id: 'SAL2025010004',
@@ -320,7 +379,8 @@ const mockSaleOrders = [
     createTime: '2025-01-08 09:00:00',
     address: '深圳市南山区科技园南区科苑南路15号深圳湾创业投资大厦28楼',
     contact: '赵总监',
-    remark: ''
+    remark: '',
+    storeId: 'STORE005'
   },
   {
     id: 'SAL2025010005',
@@ -337,9 +397,10 @@ const mockSaleOrders = [
     trackingNo: '',
     status: ORDER_STATUS.PENDING_SHIP,
     createTime: '2025-01-10 14:30:00',
-    address: '杭州市余杭区梦想小镇创业大街28号人工智能产业园B1栋',
+    address: '北京市朝阳区望京SOHO T1 B1栋',
     contact: '孙经理',
-    remark: '原厂原封包装，需提供3年原厂质保服务'
+    remark: '原厂原封包装，需提供3年原厂质保服务',
+    storeId: 'STORE001'
   },
   {
     id: 'SAL2025010006',
@@ -358,7 +419,8 @@ const mockSaleOrders = [
     createTime: '2025-01-11 10:30:00',
     address: '成都市高新区天府大道北段1700号环球中心E2区15楼',
     contact: '周女士',
-    remark: '每层楼放置2台，请分楼层标注'
+    remark: '每层楼放置2台，请分楼层标注',
+    storeId: 'STORE001'
   },
   {
     id: 'SAL2025010007',
@@ -377,7 +439,8 @@ const mockSaleOrders = [
     createTime: '2025-01-06 16:00:00',
     address: '武汉市洪山区光谷大道77号光谷金融港B22栋',
     contact: '吴工',
-    remark: '已完成上架调试，运行正常'
+    remark: '已完成上架调试，运行正常',
+    storeId: 'STORE001'
   },
   {
     id: 'SAL2025010008',
@@ -396,7 +459,8 @@ const mockSaleOrders = [
     createTime: '2025-01-15 15:20:00',
     address: '南京市建邺区庐山路188号新地中心二期36楼',
     contact: '郑总',
-    remark: '三台分别安装在前台、数据中心出入口、办公区入口'
+    remark: '三台分别安装在前台、数据中心出入口、办公区入口',
+    storeId: 'STORE001'
   }
 ];
 
@@ -465,27 +529,34 @@ app.get('/api/orders/statistics', (req, res) => {
 });
 
 app.get('/api/status/config', (req, res) => {
-  const { orderType = 'all' } = req.query;
+  const { orderType = 'all', role = 'store' } = req.query;
   
   let statusList = [];
   
   if (orderType === 'all' || orderType === ORDER_TYPE.RENT) {
-    statusList = statusList.concat([
+    const rentStatuses = [
       { key: ORDER_STATUS.PENDING_ACCEPT, label: '待接单', orderType: ORDER_TYPE.RENT },
       { key: ORDER_STATUS.PENDING_ASSIGN, label: '待指派', orderType: ORDER_TYPE.RENT },
       { key: ORDER_STATUS.PENDING_DELIVER, label: '待交付', orderType: ORDER_TYPE.RENT },
       { key: ORDER_STATUS.RENTING, label: '租赁中', orderType: ORDER_TYPE.RENT },
       { key: ORDER_STATUS.PENDING_RETURN, label: '待退租', orderType: ORDER_TYPE.RENT }
-    ]);
+    ];
+    if (role === 'hq') {
+      rentStatuses.push({ key: ORDER_STATUS.ESCALATED_TO_HQ, label: '待总部处理', orderType: ORDER_TYPE.RENT });
+    }
+    rentStatuses.push({ key: ORDER_STATUS.CANCELLED, label: '已取消', orderType: ORDER_TYPE.RENT });
+    statusList = statusList.concat(rentStatuses);
   }
   
   if (orderType === 'all' || orderType === ORDER_TYPE.SALE) {
-    statusList = statusList.concat([
+    const saleStatuses = [
       { key: ORDER_STATUS.PENDING_PAY, label: '待付款', orderType: ORDER_TYPE.SALE },
       { key: ORDER_STATUS.PENDING_SHIP, label: '待发货', orderType: ORDER_TYPE.SALE },
       { key: ORDER_STATUS.SHIPPED, label: '已发货', orderType: ORDER_TYPE.SALE },
-      { key: ORDER_STATUS.COMPLETED, label: '已完成', orderType: ORDER_TYPE.SALE }
-    ]);
+      { key: ORDER_STATUS.COMPLETED, label: '已完成', orderType: ORDER_TYPE.SALE },
+      { key: ORDER_STATUS.CANCELLED, label: '已取消', orderType: ORDER_TYPE.SALE }
+    ];
+    statusList = statusList.concat(saleStatuses);
   }
 
   statusList.unshift({ key: ORDER_STATUS.ALL, label: '全部', orderType: 'all' });
@@ -508,6 +579,205 @@ app.get('/api/order-types', (req, res) => {
     code: 0,
     message: 'success',
     data: typeList
+  });
+});
+
+app.get('/api/stores', (req, res) => {
+  res.json({
+    code: 0,
+    message: 'success',
+    data: mockStores
+  });
+});
+
+app.get('/api/current-store', (req, res) => {
+  const store = mockStores.find(s => s.id === CURRENT_STORE_ID);
+  res.json({
+    code: 0,
+    message: 'success',
+    data: store
+  });
+});
+
+app.get('/api/employees', (req, res) => {
+  const { storeId } = req.query;
+  let employees = mockEmployees;
+  if (storeId) {
+    employees = mockEmployees.filter(e => e.storeId === storeId);
+  }
+  res.json({
+    code: 0,
+    message: 'success',
+    data: employees
+  });
+});
+
+const findOrderIndex = (orderId) => {
+  return mockOrders.findIndex(o => o.id === orderId);
+};
+
+app.post('/api/orders/:id/accept', (req, res) => {
+  const { id } = req.params;
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  if (order.status !== ORDER_STATUS.PENDING_ACCEPT) {
+    return res.json({ code: 1, message: '订单状态不支持接单' });
+  }
+  order.status = ORDER_STATUS.PENDING_ASSIGN;
+  res.json({
+    code: 0,
+    message: '接单成功，已进入待指派状态',
+    data: order
+  });
+});
+
+app.post('/api/orders/:id/escalate-to-hq', (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body || {};
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  if (order.status !== ORDER_STATUS.PENDING_ACCEPT) {
+    return res.json({ code: 1, message: '订单状态不支持提交总部' });
+  }
+  order.status = ORDER_STATUS.ESCALATED_TO_HQ;
+  order.escalateReason = reason || '门店无法承接，请求总部协助';
+  res.json({
+    code: 0,
+    message: '已提交总部处理，请耐心等待',
+    data: order
+  });
+});
+
+app.post('/api/orders/:id/assign-staff', (req, res) => {
+  const { id } = req.params;
+  const { employeeId, employeeName, employeePhone } = req.body || {};
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  const assignableStatuses = [ORDER_STATUS.PENDING_ASSIGN, ORDER_STATUS.PENDING_DELIVER, ORDER_STATUS.RENTING, ORDER_STATUS.PENDING_RETURN];
+  if (!assignableStatuses.includes(order.status)) {
+    return res.json({ code: 1, message: '订单状态不支持指派员工' });
+  }
+  if (!employeeId || !employeeName) {
+    return res.json({ code: 1, message: '请选择员工' });
+  }
+  const now = new Date().toLocaleString('zh-CN', { hour12: false });
+  const action = order.status === ORDER_STATUS.PENDING_ASSIGN ? '初次指派' : '更换员工';
+  const newAssignment = {
+    id: employeeId,
+    name: employeeName,
+    phone: employeePhone,
+    assignTime: now,
+    action
+  };
+  if (!order.assignHistory) {
+    order.assignHistory = [];
+  }
+  order.assignHistory.push(newAssignment);
+  order.assignedEmployee = {
+    id: employeeId,
+    name: employeeName,
+    phone: employeePhone,
+    assignTime: now
+  };
+  if (order.status === ORDER_STATUS.PENDING_ASSIGN) {
+    order.status = ORDER_STATUS.PENDING_DELIVER;
+  }
+  res.json({
+    code: 0,
+    message: action === '初次指派' ? '员工指派成功' : '员工更换成功',
+    data: order
+  });
+});
+
+app.post('/api/orders/:id/hq-reassign', (req, res) => {
+  const { id } = req.params;
+  const { targetStoreId } = req.body || {};
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  if (order.status !== ORDER_STATUS.ESCALATED_TO_HQ) {
+    return res.json({ code: 1, message: '订单状态不支持重新分配' });
+  }
+  if (!targetStoreId) {
+    return res.json({ code: 1, message: '请选择目标门店' });
+  }
+  order.storeId = targetStoreId;
+  order.status = ORDER_STATUS.PENDING_ACCEPT;
+  order.escalateReason = '';
+  order.assignedEmployee = null;
+  order.assignHistory = [];
+  const targetStore = mockStores.find(s => s.id === targetStoreId);
+  res.json({
+    code: 0,
+    message: `已重新分配至${targetStore ? targetStore.name : targetStoreId}`,
+    data: order
+  });
+});
+
+app.post('/api/orders/:id/cancel', (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body || {};
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  if (order.status === ORDER_STATUS.COMPLETED) {
+    return res.json({ code: 1, message: '已完成订单无法取消' });
+  }
+  order.status = ORDER_STATUS.CANCELLED;
+  order.cancelReason = reason || '总部操作取消';
+  res.json({
+    code: 0,
+    message: '订单已取消',
+    data: order
+  });
+});
+
+app.post('/api/orders/:id/deliver', (req, res) => {
+  const { id } = req.params;
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  if (order.status !== ORDER_STATUS.PENDING_DELIVER) {
+    return res.json({ code: 1, message: '订单状态不支持发货' });
+  }
+  order.status = ORDER_STATUS.RENTING;
+  res.json({
+    code: 0,
+    message: '发货成功，订单进入租赁中',
+    data: order
+  });
+});
+
+app.post('/api/orders/:id/return', (req, res) => {
+  const { id } = req.params;
+  const idx = findOrderIndex(id);
+  if (idx === -1) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const order = mockOrders[idx];
+  if (order.status !== ORDER_STATUS.PENDING_RETURN) {
+    return res.json({ code: 1, message: '订单状态不支持退租' });
+  }
+  order.status = ORDER_STATUS.COMPLETED;
+  res.json({
+    code: 0,
+    message: '退租完成，订单已完结',
+    data: order
   });
 });
 

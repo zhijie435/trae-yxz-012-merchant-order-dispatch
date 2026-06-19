@@ -5,9 +5,15 @@
         <el-icon class="order-icon"><Tickets /></el-icon>
         <span class="id-text">{{ order.id }}</span>
       </div>
-      <el-tag :color="order.statusColor" effect="light" class="status-tag">
-        {{ order.statusLabel }}
-      </el-tag>
+      <div class="header-tags">
+        <el-tag v-if="order.storeName || storeInfo" type="info" effect="plain" size="small" class="store-tag-mini">
+          <el-icon><OfficeBuilding /></el-icon>
+          {{ order.storeName || (storeInfo && storeInfo.name) || order.storeId }}
+        </el-tag>
+        <el-tag :color="order.statusColor" effect="light" class="status-tag">
+          {{ order.statusLabel }}
+        </el-tag>
+      </div>
     </div>
 
     <div class="card-body">
@@ -85,6 +91,83 @@
           </div>
         </div>
       </div>
+
+      <template v-if="order.assignedEmployee || order.assignHistory?.length">
+        <div class="divider"></div>
+        <div class="info-section staff-info">
+          <div class="section-title">
+            <el-icon><Avatar /></el-icon>
+            <span>负责员工</span>
+            <el-tag v-if="order.assignedEmployee" type="success" effect="light" size="small" class="current-staff-tag">
+              当前负责
+            </el-tag>
+            <el-button
+              v-if="canChangeStaff"
+              link
+              type="primary"
+              size="small"
+              class="change-btn"
+              @click="$emit('changeStaff', order)"
+            >
+              <el-icon><RefreshRight /></el-icon>
+              更换员工
+            </el-button>
+          </div>
+          <div class="info-content">
+            <div v-if="order.assignedEmployee" class="current-staff">
+              <div class="info-item">
+                <span class="label">员工姓名：</span>
+                <span class="value highlight">{{ order.assignedEmployee.name }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">联系电话：</span>
+                <span class="value">{{ order.assignedEmployee.phone }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">指派时间：</span>
+                <span class="value">{{ order.assignedEmployee.assignTime }}</span>
+              </div>
+            </div>
+            <div v-else class="no-staff-hint">
+              <el-icon><Warning /></el-icon>
+              <span>暂未指派员工，请尽快指派</span>
+            </div>
+            <div v-if="order.assignHistory && order.assignHistory.length > 1" class="history-section">
+              <div class="history-title">指派记录</div>
+              <div class="timeline">
+                <div
+                  v-for="(record, idx) in [...order.assignHistory].reverse()"
+                  :key="idx"
+                  class="timeline-item"
+                >
+                  <div class="timeline-dot"></div>
+                  <div class="timeline-content">
+                    <span class="action-tag" :class="record.action === '初次指派' ? 'first' : 'change'">
+                      {{ record.action }}
+                    </span>
+                    <span class="staff-name">{{ record.name }}</span>
+                    <span class="staff-phone">{{ record.phone }}</span>
+                    <span class="record-time">{{ record.assignTime }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <template v-if="order.status === 'escalated_to_hq' && order.escalateReason">
+        <div class="divider"></div>
+        <div class="info-section escalate-info">
+          <div class="section-title">
+            <el-icon><Warning /></el-icon>
+            <span>上报原因</span>
+          </div>
+          <div class="escalate-reason-box">
+            {{ order.escalateReason }}
+          </div>
+        </div>
+      </template>
     </div>
 
     <div class="card-footer">
@@ -94,7 +177,17 @@
       </div>
       <div class="action-buttons">
         <el-button
-          v-if="order.status === 'pending_accept'"
+          v-if="role === 'store' && order.status === 'pending_accept'"
+          type="danger"
+          size="small"
+          plain
+          @click="$emit('escalate', order)"
+        >
+          <el-icon><Phone /></el-icon>
+          联系总部
+        </el-button>
+        <el-button
+          v-if="role === 'store' && order.status === 'pending_accept'"
           type="success"
           size="small"
           @click="$emit('accept', order)"
@@ -102,15 +195,16 @@
           接单
         </el-button>
         <el-button
-          v-if="order.status === 'pending_assign'"
+          v-if="role === 'store' && order.status === 'pending_assign'"
           type="primary"
           size="small"
           @click="$emit('assign', order)"
         >
-          指派
+          <el-icon><UserFilled /></el-icon>
+          指派员工
         </el-button>
         <el-button
-          v-if="order.status === 'pending_deliver'"
+          v-if="role === 'store' && order.status === 'pending_deliver'"
           type="warning"
           size="small"
           @click="$emit('deliver', order)"
@@ -118,12 +212,31 @@
           发货
         </el-button>
         <el-button
-          v-if="order.status === 'pending_return'"
+          v-if="role === 'store' && order.status === 'pending_return'"
           type="danger"
           size="small"
           @click="$emit('return', order)"
         >
           退租
+        </el-button>
+        <el-button
+          v-if="role === 'hq' && order.status === 'escalated_to_hq'"
+          type="primary"
+          size="small"
+          @click="$emit('hqReassign', order)"
+        >
+          <el-icon><Promotion /></el-icon>
+          重新分配
+        </el-button>
+        <el-button
+          v-if="role === 'hq' && order.status === 'escalated_to_hq'"
+          type="danger"
+          size="small"
+          plain
+          @click="$emit('hqCancel', order)"
+        >
+          <el-icon><Delete /></el-icon>
+          取消订单
         </el-button>
         <el-button size="small" @click="$emit('view', order)">
           详情
@@ -134,16 +247,36 @@
 </template>
 
 <script setup>
-import { Tickets, User, Goods, Box, Calendar, Van } from '@element-plus/icons-vue';
+import { computed } from 'vue';
+import {
+  Tickets, User, Goods, Box, Calendar, Van, OfficeBuilding,
+  Avatar, RefreshRight, Warning, Phone, UserFilled, Promotion, Delete
+} from '@element-plus/icons-vue';
 
-defineProps({
+const props = defineProps({
   order: {
     type: Object,
     required: true
+  },
+  role: {
+    type: String,
+    default: 'store'
+  },
+  storeInfo: {
+    type: Object,
+    default: null
   }
 });
 
-defineEmits(['accept', 'assign', 'deliver', 'return', 'view']);
+defineEmits([
+  'accept', 'assign', 'deliver', 'return', 'view',
+  'escalate', 'changeStaff', 'hqReassign', 'hqCancel'
+]);
+
+const canChangeStaff = computed(() => {
+  if (props.role !== 'store') return false;
+  return ['pending_deliver', 'renting', 'pending_return'].includes(props.order.status);
+});
 </script>
 
 <style scoped>
@@ -181,13 +314,35 @@ defineEmits(['accept', 'assign', 'deliver', 'return', 'view']);
   border-color: #f5222d;
 }
 
+.order-card.status-escalated_to_hq {
+  background: linear-gradient(180deg, #fff5f9 0%, #ffffff 30%);
+}
+
+.order-card.status-escalated_to_hq:hover {
+  border-color: #eb2f96;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 16px 20px;
   background: linear-gradient(135deg, #fafafa 0%, #f5f7fa 100%);
   border-bottom: 1px solid #ebeef5;
+  gap: 10px;
+}
+
+.header-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.store-tag-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .order-id {
@@ -230,11 +385,21 @@ defineEmits(['accept', 'assign', 'deliver', 'return', 'view']);
   font-weight: 600;
   color: #606266;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .section-title .el-icon {
   color: #667eea;
   font-size: 16px;
+}
+
+.current-staff-tag {
+  margin-left: 4px;
+}
+
+.change-btn {
+  margin-left: auto;
+  font-weight: 500;
 }
 
 .info-content {
@@ -335,6 +500,113 @@ defineEmits(['accept', 'assign', 'deliver', 'return', 'view']);
   font-size: 14px;
 }
 
+.current-staff {
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #d1fae5;
+}
+
+.no-staff-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #fffbe6;
+  color: #d48806;
+  border-radius: 8px;
+  border: 1px solid #ffe58f;
+  font-size: 13px;
+}
+
+.history-section {
+  margin-top: 14px;
+}
+
+.history-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #909399;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timeline {
+  padding-left: 8px;
+  border-left: 2px solid #f0f2f5;
+}
+
+.timeline-item {
+  position: relative;
+  padding: 0 0 12px 16px;
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -7px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #667eea;
+}
+
+.timeline-content {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.action-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.action-tag.first {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.action-tag.change {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.staff-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.staff-phone {
+  color: #606266;
+}
+
+.record-time {
+  color: #909399;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.escalate-reason-box {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #fdf2f8 0%, #fff1f2 100%);
+  border: 1px solid #fbcfe8;
+  border-radius: 8px;
+  color: #9d174d;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .card-footer {
   display: flex;
   justify-content: space-between;
@@ -404,6 +676,15 @@ defineEmits(['accept', 'assign', 'deliver', 'return', 'view']);
   .label {
     min-width: auto;
     margin-bottom: 2px;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-tags {
+    justify-content: flex-start;
   }
 }
 </style>

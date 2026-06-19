@@ -26,6 +26,10 @@ const props = defineProps({
   modelValue: {
     type: String,
     default: 'all'
+  },
+  role: {
+    type: String,
+    default: 'store'
   }
 });
 
@@ -60,12 +64,16 @@ watch(() => props.modelValue, (newVal) => {
   nextTick(scrollToActiveTab);
 });
 
+watch(() => props.role, () => {
+  loadStatusConfig();
+});
+
 const loadStatusConfig = async () => {
   try {
-    statusList.value = await getStatusConfig();
+    statusList.value = await getStatusConfig('all', props.role);
   } catch (error) {
     console.error('加载状态配置失败:', error);
-    statusList.value = [
+    const baseList = [
       { key: 'all', label: '全部' },
       { key: 'pending_accept', label: '待接单' },
       { key: 'pending_assign', label: '待指派' },
@@ -73,6 +81,11 @@ const loadStatusConfig = async () => {
       { key: 'renting', label: '租赁中' },
       { key: 'pending_return', label: '待退租' }
     ];
+    if (props.role === 'hq') {
+      baseList.splice(2, 0, { key: 'escalated_to_hq', label: '待总部处理' });
+    }
+    baseList.push({ key: 'cancelled', label: '已取消' });
+    statusList.value = baseList;
   }
 };
 
