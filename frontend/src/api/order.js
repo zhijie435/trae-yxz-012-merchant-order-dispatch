@@ -62,6 +62,22 @@ export const escalateOrderToHq = (orderId, reason) => {
   return request.post(`/orders/${orderId}/escalate-to-hq`, { reason });
 };
 
+export const rejectOrder = (orderId, reason) => {
+  return request.post(`/orders/${orderId}/reject`, { reason });
+};
+
+export const getOrderLogs = (orderId) => {
+  return request.get(`/orders/${orderId}/logs`);
+};
+
+export const getAllOperationLogs = (params) => {
+  return request.get('/operation-logs', { params });
+};
+
+export const getOrderTransitions = (orderId) => {
+  return request.get(`/orders/${orderId}/transitions`);
+};
+
 export const assignStaff = (orderId, employee) => {
   return request.post(`/orders/${orderId}/assign-staff`, {
     employeeId: employee.id,

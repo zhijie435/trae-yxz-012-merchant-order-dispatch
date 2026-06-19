@@ -98,6 +98,15 @@
                     <template v-if="row.orderType === 'rent'">
                       <el-button
                         v-if="role === 'store' && row.status === 'pending_accept'"
+                        type="info"
+                        size="small"
+                        plain
+                        @click="handleReject(row)"
+                      >
+                        拒单
+                      </el-button>
+                      <el-button
+                        v-if="role === 'store' && row.status === 'pending_accept'"
                         type="danger"
                         size="small"
                         plain
@@ -183,6 +192,7 @@
                       <el-button v-if="row.status === 'pending_ship'" type="primary" size="small" @click="handleSaleShip(row)">发货</el-button>
                       <el-button v-if="row.status === 'shipped'" size="small" @click="handleTracking(row)">物流</el-button>
                     </template>
+                    <el-button size="small" @click="handleViewLogs(row)">日志</el-button>
                     <el-button size="small" @click="handleViewDetail(row)">详情</el-button>
                   </div>
                 </template>
@@ -203,10 +213,12 @@
                 :role="role"
                 :store-info="getStoreInfo(order.storeId)"
                 @accept="handleAccept"
+                @reject="handleReject"
                 @assign="handleAssign"
                 @deliver="handleDeliver"
                 @return="handleReturn"
                 @view="handleViewDetail"
+                @logs="handleViewLogs"
                 @escalate="handleEscalate"
                 @changeStaff="handleChangeStaff"
                 @hqReassign="handleHqReassign"
@@ -476,6 +488,123 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="rejectDialogVisible"
+      title="拒单确认"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <div class="dialog-form">
+        <div class="order-preview">
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="订单号">{{ currentOrder?.id }}</el-descriptions-item>
+            <el-descriptions-item label="商品">{{ currentOrder?.product }}</el-descriptions-item>
+            <el-descriptions-item label="客户">{{ currentOrder?.customerName }} · {{ currentOrder?.phone }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+        <el-form :model="rejectForm" label-width="90px" class="mt-20">
+          <el-form-item label="拒单原因" required>
+            <el-input
+              v-model="rejectForm.reason"
+              type="textarea"
+              :rows="4"
+              placeholder="请说明拒单原因，便于后续优化"
+            />
+          </el-form-item>
+        </el-form>
+        <div class="preset-reasons">
+          <span class="preset-label">快捷选择：</span>
+          <el-tag
+            v-for="reason in presetRejectReasons"
+            :key="reason"
+            class="preset-tag"
+            effect="plain"
+            @click="rejectForm.reason = reason"
+          >
+            {{ reason }}
+          </el-tag>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="rejectDialogVisible = false">取消</el-button>
+        <el-button type="info" :loading="rejectLoading" :disabled="!rejectForm.reason.trim()" @click="confirmReject">
+          确认拒单
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="logsDialogVisible"
+      title="订单操作日志"
+      width="720px"
+      :close-on-click-modal="false"
+    >
+      <div class="logs-dialog-content">
+        <div class="logs-order-info">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="订单号">{{ currentOrder?.id }}</el-descriptions-item>
+            <el-descriptions-item label="当前状态">
+              <el-tag :color="currentOrder?.statusColor" effect="light" size="small">
+                {{ currentOrder?.statusLabel }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="客户" :span="2">{{ currentOrder?.customerName }} · {{ currentOrder?.phone }}</el-descriptions-item>
+            <el-descriptions-item label="商品" :span="2">{{ currentOrder?.product }}</el-descriptions-item>
+          </el-descriptions>
+        </div>
+        <div class="logs-section">
+          <div class="section-subtitle">
+            <el-icon><Clock /></el-icon>
+            操作历史（共 {{ orderLogs.length }} 条记录）
+          </div>
+          <div v-loading="logsLoading" class="logs-timeline">
+            <div v-if="orderLogs.length === 0 && !logsLoading" class="empty-logs">
+              <el-empty description="暂无操作日志" :image-size="80" />
+            </div>
+            <div v-for="(log, idx) in orderLogs" :key="log.id" class="log-item">
+              <div class="log-timeline">
+                <div class="log-dot" :class="`type-${log.operationType}`"></div>
+                <div v-if="idx < orderLogs.length - 1" class="log-line"></div>
+              </div>
+              <div class="log-content">
+                <div class="log-header">
+                  <el-tag size="small" class="op-type-tag" :class="`tag-${log.operationType}`">
+                    {{ log.operationLabel }}
+                  </el-tag>
+                  <span class="log-operator">
+                    <el-icon><User /></el-icon>
+                    {{ log.operatorName || '-' }}
+                    <span class="op-role">（{{ getRoleLabel(log.operatorRole) }}）</span>
+                  </span>
+                  <span class="log-time">
+                    <el-icon><Clock /></el-icon>
+                    {{ log.operateTime }}
+                  </span>
+                </div>
+                <div v-if="log.fromStatus || log.toStatus" class="log-status-flow">
+                  <span class="status-chip">{{ getStatusText(log.fromStatus) }}</span>
+                  <el-icon class="arrow-icon"><Right /></el-icon>
+                  <span class="status-chip to">{{ getStatusText(log.toStatus) }}</span>
+                </div>
+                <div v-if="log.remark" class="log-remark">
+                  <span class="remark-label">备注：</span>{{ log.remark }}
+                </div>
+                <div v-if="log.extra && Object.keys(log.extra).length" class="log-extra">
+                  <div v-for="(val, key) in log.extra" :key="key" class="extra-item">
+                    <span class="extra-key">{{ getExtraLabel(key) }}：</span>
+                    <span class="extra-val">{{ val }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="logsDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -484,7 +613,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   Search, Refresh, List, Grid, User, UserFilled, OfficeBuilding,
-  WarningFilled, CircleCheckFilled
+  WarningFilled, CircleCheckFilled, Clock, Right
 } from '@element-plus/icons-vue';
 import StatusFilter from './StatusFilter.vue';
 import OrderCard from './OrderCard.vue';
@@ -494,12 +623,14 @@ import {
   getEmployees,
   getStores,
   acceptOrder,
+  rejectOrder,
   escalateOrderToHq,
   assignStaff,
   hqReassignStore,
   cancelOrder,
   deliverOrder,
-  returnOrder
+  returnOrder,
+  getOrderLogs
 } from '../api/order.js';
 
 const props = defineProps({
@@ -539,6 +670,22 @@ const presetEscalateReasons = [
   '交付时间冲突，无法安排',
   '特殊安装需求，本门店不具备条件'
 ];
+
+const presetRejectReasons = [
+  '超出门店服务范围',
+  '库存不足无法满足',
+  '客户要求无法满足',
+  '价格无法达成一致',
+  '交付时间无法安排'
+];
+
+const rejectDialogVisible = ref(false);
+const rejectLoading = ref(false);
+const rejectForm = ref({ reason: '' });
+
+const logsDialogVisible = ref(false);
+const logsLoading = ref(false);
+const orderLogs = ref([]);
 
 const assignDialogVisible = ref(false);
 const assignLoading = ref(false);
@@ -837,6 +984,67 @@ const handleTracking = (row) => {
 
 const handleViewDetail = (row) => {
   ElMessage.info(`查看订单详情：${row.id}`);
+};
+
+const handleReject = (row) => {
+  currentOrder.value = row;
+  rejectForm.value = { reason: '' };
+  rejectDialogVisible.value = true;
+};
+
+const confirmReject = async () => {
+  if (!rejectForm.value.reason.trim()) {
+    ElMessage.warning('请填写拒单原因');
+    return;
+  }
+  rejectLoading.value = true;
+  try {
+    await rejectOrder(currentOrder.value.id, rejectForm.value.reason.trim());
+    ElMessage.success('已拒单');
+    rejectDialogVisible.value = false;
+    refreshOrderList();
+  } catch (e) {
+    ElMessage.error(e.message || '拒单失败');
+  } finally {
+    rejectLoading.value = false;
+  }
+};
+
+const handleViewLogs = async (row) => {
+  currentOrder.value = row;
+  orderLogs.value = [];
+  logsDialogVisible.value = true;
+  logsLoading.value = true;
+  try {
+    orderLogs.value = await getOrderLogs(row.id);
+  } catch (e) {
+    console.error('加载操作日志失败', e);
+    ElMessage.error('加载操作日志失败');
+  } finally {
+    logsLoading.value = false;
+  }
+};
+
+const getRoleLabel = (role) => {
+  const map = { store: '门店端', employee: '员工端', hq: '总部端' };
+  return map[role] || role || '-';
+};
+
+const getStatusText = (status) => {
+  if (!status) return '-';
+  const allMap = { ...RENT_STATUS_MAP, ...SALE_STATUS_MAP };
+  return allMap[status]?.label || status;
+};
+
+const getExtraLabel = (key) => {
+  const map = {
+    employeeId: '员工编号',
+    employeeName: '员工姓名',
+    employeePhone: '员工电话',
+    targetStoreId: '目标门店编号',
+    targetStoreName: '目标门店名称'
+  };
+  return map[key] || key;
 };
 
 onMounted(() => {
@@ -1284,5 +1492,270 @@ onMounted(() => {
   .order-card-grid {
     grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
   }
+}
+
+.logs-dialog-content {
+  padding: 4px;
+}
+
+.logs-order-info {
+  background: #fafbfc;
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 8px;
+}
+
+.logs-section {
+  margin-top: 8px;
+}
+
+.logs-timeline {
+  padding: 8px 4px 8px 0;
+  min-height: 120px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.empty-logs {
+  padding: 40px 0;
+}
+
+.log-item {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+.log-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.log-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #667eea;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px #667eea40;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.log-dot.type-accept {
+  background: #52c41a;
+  box-shadow: 0 0 0 2px #52c41a40;
+}
+
+.log-dot.type-reject {
+  background: #6b7280;
+  box-shadow: 0 0 0 2px #6b728040;
+}
+
+.log-dot.type-escalate {
+  background: #eb2f96;
+  box-shadow: 0 0 0 2px #eb2f9640;
+}
+
+.log-dot.type-assign,
+.log-dot.type-reassign {
+  background: #1890ff;
+  box-shadow: 0 0 0 2px #1890ff40;
+}
+
+.log-dot.type-deliver {
+  background: #722ed1;
+  box-shadow: 0 0 0 2px #722ed140;
+}
+
+.log-dot.type-return {
+  background: #fa8c16;
+  box-shadow: 0 0 0 2px #fa8c1640;
+}
+
+.log-dot.type-cancel {
+  background: #f5222d;
+  box-shadow: 0 0 0 2px #f5222d40;
+}
+
+.log-dot.type-hq_reassign {
+  background: #667eea;
+  box-shadow: 0 0 0 2px #667eea40;
+}
+
+.log-line {
+  flex: 1;
+  width: 2px;
+  background: linear-gradient(180deg, #e5e7eb 0%, transparent 100%);
+  margin-top: 4px;
+}
+
+.log-content {
+  flex: 1;
+  background: #fafbfc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.op-type-tag {
+  font-weight: 600;
+}
+
+.op-type-tag.tag-accept {
+  background: #ecfdf5;
+  color: #059669;
+  border: none;
+}
+
+.op-type-tag.tag-reject {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: none;
+}
+
+.op-type-tag.tag-escalate {
+  background: #fdf2f8;
+  color: #be185d;
+  border: none;
+}
+
+.op-type-tag.tag-assign,
+.op-type-tag.tag-reassign {
+  background: #eff6ff;
+  color: #2563eb;
+  border: none;
+}
+
+.op-type-tag.tag-deliver {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: none;
+}
+
+.op-type-tag.tag-return {
+  background: #fff7ed;
+  color: #c2410c;
+  border: none;
+}
+
+.op-type-tag.tag-cancel {
+  background: #fef2f2;
+  color: #dc2626;
+  border: none;
+}
+
+.op-type-tag.tag-hq_reassign {
+  background: #eef2ff;
+  color: #4f46e5;
+  border: none;
+}
+
+.log-operator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.log-operator .el-icon {
+  color: #667eea;
+}
+
+.op-role {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.log-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.log-time .el-icon {
+  font-size: 13px;
+}
+
+.log-status-flow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: #f3f4f6;
+  color: #6b7280;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-chip.to {
+  background: linear-gradient(135deg, #667eea1a 0%, #764ba21a 100%);
+  color: #667eea;
+}
+
+.arrow-icon {
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.log-remark {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.remark-label {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.log-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.extra-item {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.extra-key {
+  color: #9ca3af;
+}
+
+.extra-val {
+  color: #374151;
+  font-weight: 500;
 }
 </style>

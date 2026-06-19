@@ -168,6 +168,19 @@
           </div>
         </div>
       </template>
+
+      <template v-if="order.status === 'rejected' && order.rejectReason">
+        <div class="divider"></div>
+        <div class="info-section reject-info">
+          <div class="section-title">
+            <el-icon><Warning /></el-icon>
+            <span>拒单原因</span>
+          </div>
+          <div class="reject-reason-box">
+            {{ order.rejectReason }}
+          </div>
+        </div>
+      </template>
     </div>
 
     <div class="card-footer">
@@ -176,6 +189,15 @@
         <span class="amount-value">¥{{ order.amount.toFixed(2) }}</span>
       </div>
       <div class="action-buttons">
+        <el-button
+          v-if="role === 'store' && order.status === 'pending_accept'"
+          type="info"
+          size="small"
+          plain
+          @click="$emit('reject', order)"
+        >
+          拒单
+        </el-button>
         <el-button
           v-if="role === 'store' && order.status === 'pending_accept'"
           type="danger"
@@ -238,6 +260,9 @@
           <el-icon><Delete /></el-icon>
           取消订单
         </el-button>
+        <el-button size="small" @click="$emit('logs', order)">
+          日志
+        </el-button>
         <el-button size="small" @click="$emit('view', order)">
           详情
         </el-button>
@@ -269,7 +294,7 @@ const props = defineProps({
 });
 
 defineEmits([
-  'accept', 'assign', 'deliver', 'return', 'view',
+  'accept', 'reject', 'assign', 'deliver', 'return', 'view', 'logs',
   'escalate', 'changeStaff', 'hqReassign', 'hqCancel'
 ]);
 
@@ -605,6 +630,24 @@ const canChangeStaff = computed(() => {
   color: #9d174d;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.reject-reason-box {
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.order-card.status-rejected {
+  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 30%);
+}
+
+.order-card.status-rejected:hover {
+  border-color: #6b7280;
 }
 
 .card-footer {

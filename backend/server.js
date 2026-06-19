@@ -6,6 +6,10 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+// ============================================================
+// 模块一：常量定义（枚举、状态映射、操作类型）
+// ============================================================
+
 const ORDER_TYPE = {
   RENT: 'rent',
   SALE: 'sale'
@@ -23,7 +27,36 @@ const ORDER_STATUS = {
   SHIPPED: 'shipped',
   COMPLETED: 'completed',
   ESCALATED_TO_HQ: 'escalated_to_hq',
+  REJECTED: 'rejected',
   CANCELLED: 'cancelled'
+};
+
+const OPERATION_TYPE = {
+  ACCEPT: 'accept',
+  REJECT: 'reject',
+  ESCALATE: 'escalate',
+  ASSIGN: 'assign',
+  REASSIGN: 'reassign',
+  DELIVER: 'deliver',
+  RETURN: 'return',
+  CANCEL: 'cancel',
+  HQ_REASSIGN: 'hq_reassign',
+  SHIP: 'ship',
+  REMIND_PAY: 'remind_pay'
+};
+
+const OPERATION_LABEL = {
+  [OPERATION_TYPE.ACCEPT]: '接单',
+  [OPERATION_TYPE.REJECT]: '拒单',
+  [OPERATION_TYPE.ESCALATE]: '上报总部',
+  [OPERATION_TYPE.ASSIGN]: '指派员工',
+  [OPERATION_TYPE.REASSIGN]: '更换员工',
+  [OPERATION_TYPE.DELIVER]: '发货交付',
+  [OPERATION_TYPE.RETURN]: '退租完成',
+  [OPERATION_TYPE.CANCEL]: '取消订单',
+  [OPERATION_TYPE.HQ_REASSIGN]: '总部重新分配',
+  [OPERATION_TYPE.SHIP]: '订单发货',
+  [OPERATION_TYPE.REMIND_PAY]: '催付提醒'
 };
 
 const RENT_STATUS_MAP = {
@@ -33,6 +66,7 @@ const RENT_STATUS_MAP = {
   [ORDER_STATUS.RENTING]: { label: '租赁中', color: '#52c41a' },
   [ORDER_STATUS.PENDING_RETURN]: { label: '待退租', color: '#f5222d' },
   [ORDER_STATUS.ESCALATED_TO_HQ]: { label: '待总部处理', color: '#eb2f96' },
+  [ORDER_STATUS.REJECTED]: { label: '已拒单', color: '#8c8c8c' },
   [ORDER_STATUS.CANCELLED]: { label: '已取消', color: '#8c8c8c' }
 };
 
@@ -43,6 +77,152 @@ const SALE_STATUS_MAP = {
   [ORDER_STATUS.COMPLETED]: { label: '已完成', color: '#52c41a' },
   [ORDER_STATUS.CANCELLED]: { label: '已取消', color: '#8c8c8c' }
 };
+
+const ROLE = {
+  STORE: 'store',
+  EMPLOYEE: 'employee',
+  HQ: 'hq'
+};
+
+// ============================================================
+// 模块二：订单状态机（定义合法的状态流转规则）
+// ============================================================
+
+const RENT_STATE_TRANSITIONS = {
+  [ORDER_STATUS.PENDING_ACCEPT]: [
+    ORDER_STATUS.PENDING_ASSIGN,
+    ORDER_STATUS.ESCALATED_TO_HQ,
+    ORDER_STATUS.REJECTED,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.PENDING_ASSIGN]: [
+    ORDER_STATUS.PENDING_DELIVER,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.PENDING_DELIVER]: [
+    ORDER_STATUS.RENTING,
+    ORDER_STATUS.PENDING_DELIVER,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.RENTING]: [
+    ORDER_STATUS.PENDING_RETURN,
+    ORDER_STATUS.RENTING,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.PENDING_RETURN]: [
+    ORDER_STATUS.COMPLETED,
+    ORDER_STATUS.PENDING_RETURN,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.ESCALATED_TO_HQ]: [
+    ORDER_STATUS.PENDING_ACCEPT,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.REJECTED]: [
+    ORDER_STATUS.PENDING_ACCEPT
+  ],
+  [ORDER_STATUS.COMPLETED]: [],
+  [ORDER_STATUS.CANCELLED]: []
+};
+
+const SALE_STATE_TRANSITIONS = {
+  [ORDER_STATUS.PENDING_PAY]: [
+    ORDER_STATUS.PENDING_SHIP,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.PENDING_SHIP]: [
+    ORDER_STATUS.SHIPPED,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.SHIPPED]: [
+    ORDER_STATUS.COMPLETED,
+    ORDER_STATUS.CANCELLED
+  ],
+  [ORDER_STATUS.COMPLETED]: [],
+  [ORDER_STATUS.CANCELLED]: []
+};
+
+const OrderStateMachine = {
+  canTransition(order, nextStatus) {
+    const transitions = order.orderType === ORDER_TYPE.RENT
+      ? RENT_STATE_TRANSITIONS
+      : SALE_STATE_TRANSITIONS;
+    const allowed = transitions[order.status] || [];
+    return allowed.includes(nextStatus);
+  },
+
+  validateTransition(order, nextStatus, operationType) {
+    if (!this.canTransition(order, nextStatus)) {
+      return {
+        valid: false,
+        message: `订单状态「${this.getStatusLabel(order)}」不支持${OPERATION_LABEL[operationType] || '该操作'}`
+      };
+    }
+    return { valid: true };
+  },
+
+  getStatusLabel(order) {
+    const map = order.orderType === ORDER_TYPE.RENT ? RENT_STATUS_MAP : SALE_STATUS_MAP;
+    return (map[order.status] || {}).label || '未知';
+  },
+
+  getTransitionsForStatus(orderType, status) {
+    const transitions = orderType === ORDER_TYPE.RENT
+      ? RENT_STATE_TRANSITIONS
+      : SALE_STATE_TRANSITIONS;
+    return transitions[status] || [];
+  }
+};
+
+// ============================================================
+// 模块三：操作日志系统
+// ============================================================
+
+const operationLogs = [];
+
+const OperationLogService = {
+  create(params) {
+    const log = {
+      id: `LOG${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+      orderId: params.orderId,
+      orderType: params.orderType || '',
+      operationType: params.operationType,
+      operationLabel: OPERATION_LABEL[params.operationType] || params.operationType,
+      operatorRole: params.operatorRole || ROLE.STORE,
+      operatorId: params.operatorId || '',
+      operatorName: params.operatorName || '',
+      fromStatus: params.fromStatus || '',
+      toStatus: params.toStatus || '',
+      remark: params.remark || '',
+      extra: params.extra || {},
+      operateTime: new Date().toLocaleString('zh-CN', { hour12: false })
+    };
+    operationLogs.unshift(log);
+    return log;
+  },
+
+  findByOrderId(orderId) {
+    return operationLogs.filter(log => log.orderId === orderId);
+  },
+
+  findAll(filters = {}) {
+    let logs = [...operationLogs];
+    if (filters.orderId) {
+      logs = logs.filter(log => log.orderId === filters.orderId);
+    }
+    if (filters.operationType) {
+      logs = logs.filter(log => log.operationType === filters.operationType);
+    }
+    if (filters.operatorRole) {
+      logs = logs.filter(log => log.operatorRole === filters.operatorRole);
+    }
+    return logs;
+  }
+};
+
+// ============================================================
+// 模块四：Mock 数据
+// ============================================================
 
 const mockStores = [
   { id: 'STORE001', name: '北京朝阳门店', contact: '王经理', phone: '138****1111' },
@@ -68,6 +248,11 @@ const mockEmployees = [
 
 const CURRENT_STORE_ID = 'STORE001';
 const CURRENT_EMPLOYEE_ID = 'EMP001';
+const CURRENT_OPERATOR = {
+  [ROLE.STORE]: { id: CURRENT_STORE_ID, name: '王经理', role: ROLE.STORE },
+  [ROLE.EMPLOYEE]: { id: CURRENT_EMPLOYEE_ID, name: '赵明', role: ROLE.EMPLOYEE },
+  [ROLE.HQ]: { id: 'HQ001', name: '总部调度员', role: ROLE.HQ }
+};
 
 const mockRentOrders = [
   {
@@ -91,7 +276,8 @@ const mockRentOrders = [
     storeId: 'STORE001',
     assignedEmployee: null,
     assignHistory: [],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010002',
@@ -114,7 +300,8 @@ const mockRentOrders = [
     storeId: 'STORE003',
     assignedEmployee: null,
     assignHistory: [],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010003',
@@ -137,7 +324,8 @@ const mockRentOrders = [
     storeId: 'STORE004',
     assignedEmployee: null,
     assignHistory: [],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010004',
@@ -160,7 +348,8 @@ const mockRentOrders = [
     storeId: 'STORE005',
     assignedEmployee: null,
     assignHistory: [],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010005',
@@ -183,7 +372,8 @@ const mockRentOrders = [
     storeId: 'STORE001',
     assignedEmployee: { id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-15 09:00:00' },
     assignHistory: [{ id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-15 09:00:00', action: '初次指派' }],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010006',
@@ -206,7 +396,8 @@ const mockRentOrders = [
     storeId: 'STORE002',
     assignedEmployee: { id: 'EMP004', name: '周磊', phone: '136****2001', assignTime: '2025-01-14 10:30:00' },
     assignHistory: [{ id: 'EMP004', name: '周磊', phone: '136****2001', assignTime: '2025-01-14 10:30:00', action: '初次指派' }],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010007',
@@ -229,7 +420,8 @@ const mockRentOrders = [
     storeId: 'STORE001',
     assignedEmployee: { id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2025-01-10 06:00:00' },
     assignHistory: [{ id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2025-01-10 06:00:00', action: '初次指派' }],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010008',
@@ -252,7 +444,8 @@ const mockRentOrders = [
     storeId: 'STORE001',
     assignedEmployee: { id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-04 14:00:00' },
     assignHistory: [{ id: 'EMP001', name: '赵明', phone: '136****1001', assignTime: '2025-01-04 14:00:00', action: '初次指派' }],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010009',
@@ -275,7 +468,8 @@ const mockRentOrders = [
     storeId: 'STORE002',
     assignedEmployee: { id: 'EMP005', name: '吴涛', phone: '136****2002', assignTime: '2024-12-14 16:00:00' },
     assignHistory: [{ id: 'EMP005', name: '吴涛', phone: '136****2002', assignTime: '2024-12-14 16:00:00', action: '初次指派' }],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   },
   {
     id: 'ORD2025010010',
@@ -298,7 +492,8 @@ const mockRentOrders = [
     storeId: 'STORE001',
     assignedEmployee: { id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2024-12-19 10:00:00' },
     assignHistory: [{ id: 'EMP002', name: '钱伟', phone: '136****1002', assignTime: '2024-12-19 10:00:00', action: '初次指派' }],
-    escalateReason: ''
+    escalateReason: '',
+    rejectReason: ''
   }
 ];
 
@@ -467,6 +662,10 @@ const mockSaleOrders = [
 
 const mockOrders = [...mockRentOrders, ...mockSaleOrders];
 
+// ============================================================
+// 模块五：工具函数
+// ============================================================
+
 const getStatusInfo = (order) => {
   if (order.orderType === ORDER_TYPE.RENT) {
     return RENT_STATUS_MAP[order.status] || { label: '未知', color: '#909399' };
@@ -474,9 +673,451 @@ const getStatusInfo = (order) => {
   return SALE_STATUS_MAP[order.status] || { label: '未知', color: '#909399' };
 };
 
+const findOrderIndex = (orderId) => {
+  return mockOrders.findIndex(o => o.id === orderId);
+};
+
+const findOrder = (orderId) => {
+  return mockOrders.find(o => o.id === orderId);
+};
+
+const nowStr = () => new Date().toLocaleString('zh-CN', { hour12: false });
+
+const getOperator = (role = ROLE.STORE) => {
+  return CURRENT_OPERATOR[role] || CURRENT_OPERATOR[ROLE.STORE];
+};
+
+// ============================================================
+// 模块六：订单服务层（核心业务逻辑）
+// ============================================================
+
+const OrderService = {
+  acceptOrder(orderId, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.PENDING_ASSIGN, OPERATION_TYPE.ACCEPT);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    order.status = ORDER_STATUS.PENDING_ASSIGN;
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.ACCEPT,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: '门店确认接单'
+    });
+
+    return {
+      success: true,
+      message: '接单成功，已进入待指派状态',
+      data: order
+    };
+  },
+
+  rejectOrder(orderId, reason, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    if (!reason || !reason.trim()) {
+      return { success: false, code: 400, message: '请填写拒单原因' };
+    }
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.REJECTED, OPERATION_TYPE.REJECT);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    order.status = ORDER_STATUS.REJECTED;
+    order.rejectReason = reason.trim();
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.REJECT,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: reason.trim()
+    });
+
+    return {
+      success: true,
+      message: '已拒单，原因已记录',
+      data: order
+    };
+  },
+
+  escalateToHq(orderId, reason, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    if (!reason || !reason.trim()) {
+      return { success: false, code: 400, message: '请填写上报原因' };
+    }
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.ESCALATED_TO_HQ, OPERATION_TYPE.ESCALATE);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    order.status = ORDER_STATUS.ESCALATED_TO_HQ;
+    order.escalateReason = reason.trim();
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.ESCALATE,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: reason.trim()
+    });
+
+    return {
+      success: true,
+      message: '已提交总部处理，请耐心等待',
+      data: order
+    };
+  },
+
+  assignStaff(orderId, employee, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+    const wasAssigned = !!order.assignedEmployee;
+    const operationType = wasAssigned ? OPERATION_TYPE.REASSIGN : OPERATION_TYPE.ASSIGN;
+
+    if (!employee || !employee.id || !employee.name) {
+      return { success: false, code: 400, message: '请选择员工' };
+    }
+
+    const assignableStatuses = [
+      ORDER_STATUS.PENDING_ASSIGN,
+      ORDER_STATUS.PENDING_DELIVER,
+      ORDER_STATUS.RENTING,
+      ORDER_STATUS.PENDING_RETURN
+    ];
+    if (!assignableStatuses.includes(order.status)) {
+      return { success: false, code: 400, message: '当前状态不支持指派员工' };
+    }
+
+    const emp = mockEmployees.find(e => e.id === employee.id);
+    if (!emp) {
+      return { success: false, code: 404, message: '员工不存在' };
+    }
+    if (emp.status === 'on_leave') {
+      return { success: false, code: 400, message: '该员工正在休假，无法指派' };
+    }
+    if (emp.status === 'busy' && !(wasAssigned && order.assignedEmployee.id === emp.id)) {
+      return { success: false, code: 400, message: '该员工当前忙碌，建议指派空闲员工' };
+    }
+
+    const now = nowStr();
+    const action = wasAssigned ? '更换员工' : '初次指派';
+    const newAssignment = {
+      id: employee.id,
+      name: employee.name,
+      phone: employee.phone || emp.phone,
+      assignTime: now,
+      action
+    };
+
+    if (!order.assignHistory) {
+      order.assignHistory = [];
+    }
+    order.assignHistory.push(newAssignment);
+    order.assignedEmployee = {
+      id: employee.id,
+      name: employee.name,
+      phone: employee.phone || emp.phone,
+      assignTime: now
+    };
+
+    if (order.status === ORDER_STATUS.PENDING_ASSIGN) {
+      order.status = ORDER_STATUS.PENDING_DELIVER;
+    }
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: action,
+      extra: {
+        employeeId: employee.id,
+        employeeName: employee.name,
+        employeePhone: employee.phone || emp.phone
+      }
+    });
+
+    return {
+      success: true,
+      message: wasAssigned ? '员工更换成功' : '员工指派成功',
+      data: order
+    };
+  },
+
+  deliverOrder(orderId, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.RENTING, OPERATION_TYPE.DELIVER);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    if (!order.assignedEmployee) {
+      return { success: false, code: 400, message: '请先指派员工再发货' };
+    }
+
+    order.status = ORDER_STATUS.RENTING;
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.DELIVER,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: '确认发货交付，租赁服务开始'
+    });
+
+    return {
+      success: true,
+      message: '发货成功，订单进入租赁中',
+      data: order
+    };
+  },
+
+  returnOrder(orderId, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.COMPLETED, OPERATION_TYPE.RETURN);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    order.status = ORDER_STATUS.COMPLETED;
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.RETURN,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: '退租完成，订单完结'
+    });
+
+    return {
+      success: true,
+      message: '退租完成，订单已完结',
+      data: order
+    };
+  },
+
+  hqReassign(orderId, targetStoreId, operatorRole = ROLE.HQ) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.PENDING_ACCEPT, OPERATION_TYPE.HQ_REASSIGN);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    if (!targetStoreId) {
+      return { success: false, code: 400, message: '请选择目标门店' };
+    }
+
+    const targetStore = mockStores.find(s => s.id === targetStoreId);
+    if (!targetStore) {
+      return { success: false, code: 404, message: '目标门店不存在' };
+    }
+
+    order.storeId = targetStoreId;
+    order.status = ORDER_STATUS.PENDING_ACCEPT;
+    order.escalateReason = '';
+    order.rejectReason = '';
+    order.assignedEmployee = null;
+    order.assignHistory = [];
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.HQ_REASSIGN,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: `重新分配至「${targetStore.name}」`,
+      extra: {
+        targetStoreId,
+        targetStoreName: targetStore.name
+      }
+    });
+
+    return {
+      success: true,
+      message: `已重新分配至${targetStore.name}`,
+      data: order
+    };
+  },
+
+  cancelOrder(orderId, reason, operatorRole = ROLE.HQ) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    if (order.status === ORDER_STATUS.COMPLETED) {
+      return { success: false, code: 400, message: '已完成订单无法取消' };
+    }
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.CANCELLED, OPERATION_TYPE.CANCEL);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    order.status = ORDER_STATUS.CANCELLED;
+    order.cancelReason = reason || '操作取消';
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.CANCEL,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: reason || '操作取消'
+    });
+
+    return {
+      success: true,
+      message: '订单已取消',
+      data: order
+    };
+  },
+
+  saleShip(orderId, operatorRole = ROLE.STORE) {
+    const idx = findOrderIndex(orderId);
+    if (idx === -1) {
+      return { success: false, code: 404, message: '订单不存在' };
+    }
+    const order = mockOrders[idx];
+    const fromStatus = order.status;
+
+    const validation = OrderStateMachine.validateTransition(order, ORDER_STATUS.SHIPPED, OPERATION_TYPE.SHIP);
+    if (!validation.valid) {
+      return { success: false, code: 400, message: validation.message };
+    }
+
+    order.status = ORDER_STATUS.SHIPPED;
+    order.shipTime = nowStr();
+
+    const operator = getOperator(operatorRole);
+    OperationLogService.create({
+      orderId: order.id,
+      orderType: order.orderType,
+      operationType: OPERATION_TYPE.SHIP,
+      operatorRole: operator.role,
+      operatorId: operator.id,
+      operatorName: operator.name,
+      fromStatus,
+      toStatus: order.status,
+      remark: '销售订单已发货'
+    });
+
+    return {
+      success: true,
+      message: '发货成功',
+      data: order
+    };
+  }
+};
+
+// ============================================================
+// 模块七：路由层（薄控制器，仅做参数解析和响应格式化）
+// ============================================================
+
+const handleServiceResult = (res, result) => {
+  if (result.success) {
+    res.json({
+      code: 0,
+      message: result.message,
+      data: result.data
+    });
+  } else {
+    res.json({
+      code: result.code || 1,
+      message: result.message
+    });
+  }
+};
+
 app.get('/api/orders', (req, res) => {
   const { status, orderType, employeeId } = req.query;
-  
+
   let orders = mockOrders.map(order => {
     const statusInfo = getStatusInfo(order);
     return {
@@ -505,6 +1146,24 @@ app.get('/api/orders', (req, res) => {
   });
 });
 
+app.get('/api/orders/:id', (req, res) => {
+  const { id } = req.params;
+  const order = findOrder(id);
+  if (!order) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const statusInfo = getStatusInfo(order);
+  res.json({
+    code: 0,
+    message: 'success',
+    data: {
+      ...order,
+      statusLabel: statusInfo.label,
+      statusColor: statusInfo.color
+    }
+  });
+});
+
 app.get('/api/orders/statistics', (req, res) => {
   const { employeeId } = req.query;
   let rentOrders = mockOrders.filter(o => o.orderType === ORDER_TYPE.RENT);
@@ -518,7 +1177,7 @@ app.get('/api/orders/statistics', (req, res) => {
   const myOrders = employeeId
     ? mockOrders.filter(o => o.assignedEmployee && o.assignedEmployee.id === employeeId)
     : mockOrders;
-  
+
   const statistics = {
     all: myOrders.length,
     rent_all: rentOrders.length,
@@ -529,6 +1188,7 @@ app.get('/api/orders/statistics', (req, res) => {
     renting: rentOrders.filter(o => o.status === ORDER_STATUS.RENTING).length,
     pending_return: rentOrders.filter(o => o.status === ORDER_STATUS.PENDING_RETURN).length,
     escalated_to_hq: rentOrders.filter(o => o.status === ORDER_STATUS.ESCALATED_TO_HQ).length,
+    rejected: rentOrders.filter(o => o.status === ORDER_STATUS.REJECTED).length,
     pending_pay: saleOrders.filter(o => o.status === ORDER_STATUS.PENDING_PAY).length,
     pending_ship: saleOrders.filter(o => o.status === ORDER_STATUS.PENDING_SHIP).length,
     shipped: saleOrders.filter(o => o.status === ORDER_STATUS.SHIPPED).length,
@@ -545,9 +1205,9 @@ app.get('/api/orders/statistics', (req, res) => {
 
 app.get('/api/status/config', (req, res) => {
   const { orderType = 'all', role = 'store' } = req.query;
-  
+
   let statusList = [];
-  
+
   if (role === 'employee') {
     const employeeStatuses = [
       { key: ORDER_STATUS.ALL, label: '全部', orderType: 'all' },
@@ -562,7 +1222,7 @@ app.get('/api/status/config', (req, res) => {
       data: employeeStatuses
     });
   }
-  
+
   if (orderType === 'all' || orderType === ORDER_TYPE.RENT) {
     const rentStatuses = [
       { key: ORDER_STATUS.PENDING_ACCEPT, label: '待接单', orderType: ORDER_TYPE.RENT },
@@ -571,13 +1231,16 @@ app.get('/api/status/config', (req, res) => {
       { key: ORDER_STATUS.RENTING, label: '租赁中', orderType: ORDER_TYPE.RENT },
       { key: ORDER_STATUS.PENDING_RETURN, label: '待退租', orderType: ORDER_TYPE.RENT }
     ];
-    if (role === 'hq') {
+    if (role === ROLE.STORE) {
+      rentStatuses.push({ key: ORDER_STATUS.REJECTED, label: '已拒单', orderType: ORDER_TYPE.RENT });
+    }
+    if (role === ROLE.HQ) {
       rentStatuses.push({ key: ORDER_STATUS.ESCALATED_TO_HQ, label: '待总部处理', orderType: ORDER_TYPE.RENT });
     }
     rentStatuses.push({ key: ORDER_STATUS.CANCELLED, label: '已取消', orderType: ORDER_TYPE.RENT });
     statusList = statusList.concat(rentStatuses);
   }
-  
+
   if (orderType === 'all' || orderType === ORDER_TYPE.SALE) {
     const saleStatuses = [
       { key: ORDER_STATUS.PENDING_PAY, label: '待付款', orderType: ORDER_TYPE.SALE },
@@ -662,178 +1325,136 @@ app.get('/api/employees', (req, res) => {
   });
 });
 
-const findOrderIndex = (orderId) => {
-  return mockOrders.findIndex(o => o.id === orderId);
-};
+app.get('/api/orders/:id/logs', (req, res) => {
+  const { id } = req.params;
+  const order = findOrder(id);
+  if (!order) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const logs = OperationLogService.findByOrderId(id);
+  res.json({
+    code: 0,
+    message: 'success',
+    data: logs
+  });
+});
+
+app.get('/api/operation-logs', (req, res) => {
+  const { orderId, operationType, operatorRole } = req.query;
+  const logs = OperationLogService.findAll({ orderId, operationType, operatorRole });
+  res.json({
+    code: 0,
+    message: 'success',
+    data: logs
+  });
+});
+
+app.get('/api/orders/:id/transitions', (req, res) => {
+  const { id } = req.params;
+  const order = findOrder(id);
+  if (!order) {
+    return res.json({ code: 1, message: '订单不存在' });
+  }
+  const nextStatuses = OrderStateMachine.getTransitionsForStatus(order.orderType, order.status);
+  const transitions = nextStatuses.map(status => {
+    const info = order.orderType === ORDER_TYPE.RENT
+      ? RENT_STATUS_MAP[status]
+      : SALE_STATUS_MAP[status];
+    return {
+      status,
+      label: info?.label || status,
+      color: info?.color || '#909399'
+    };
+  });
+  res.json({
+    code: 0,
+    message: 'success',
+    data: {
+      currentStatus: order.status,
+      currentLabel: OrderStateMachine.getStatusLabel(order),
+      transitions
+    }
+  });
+});
 
 app.post('/api/orders/:id/accept', (req, res) => {
   const { id } = req.params;
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  if (order.status !== ORDER_STATUS.PENDING_ACCEPT) {
-    return res.json({ code: 1, message: '订单状态不支持接单' });
-  }
-  order.status = ORDER_STATUS.PENDING_ASSIGN;
-  res.json({
-    code: 0,
-    message: '接单成功，已进入待指派状态',
-    data: order
-  });
+  const { operatorRole } = req.body || {};
+  const result = OrderService.acceptOrder(id, operatorRole || ROLE.STORE);
+  handleServiceResult(res, result);
+});
+
+app.post('/api/orders/:id/reject', (req, res) => {
+  const { id } = req.params;
+  const { reason, operatorRole } = req.body || {};
+  const result = OrderService.rejectOrder(id, reason, operatorRole || ROLE.STORE);
+  handleServiceResult(res, result);
 });
 
 app.post('/api/orders/:id/escalate-to-hq', (req, res) => {
   const { id } = req.params;
-  const { reason } = req.body || {};
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  if (order.status !== ORDER_STATUS.PENDING_ACCEPT) {
-    return res.json({ code: 1, message: '订单状态不支持提交总部' });
-  }
-  if (!reason || !reason.trim()) {
-    return res.json({ code: 1, message: '请填写拒单原因' });
-  }
-  order.status = ORDER_STATUS.ESCALATED_TO_HQ;
-  order.escalateReason = reason.trim();
-  res.json({
-    code: 0,
-    message: '已提交总部处理，请耐心等待',
-    data: order
-  });
+  const { reason, operatorRole } = req.body || {};
+  const result = OrderService.escalateToHq(id, reason, operatorRole || ROLE.STORE);
+  handleServiceResult(res, result);
 });
 
 app.post('/api/orders/:id/assign-staff', (req, res) => {
   const { id } = req.params;
-  const { employeeId, employeeName, employeePhone } = req.body || {};
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  const assignableStatuses = [ORDER_STATUS.PENDING_ASSIGN, ORDER_STATUS.PENDING_DELIVER, ORDER_STATUS.RENTING, ORDER_STATUS.PENDING_RETURN];
-  if (!assignableStatuses.includes(order.status)) {
-    return res.json({ code: 1, message: '订单状态不支持指派员工' });
-  }
-  if (!employeeId || !employeeName) {
-    return res.json({ code: 1, message: '请选择员工' });
-  }
-  const now = new Date().toLocaleString('zh-CN', { hour12: false });
-  const action = order.status === ORDER_STATUS.PENDING_ASSIGN ? '初次指派' : '更换员工';
-  const newAssignment = {
-    id: employeeId,
-    name: employeeName,
-    phone: employeePhone,
-    assignTime: now,
-    action
-  };
-  if (!order.assignHistory) {
-    order.assignHistory = [];
-  }
-  order.assignHistory.push(newAssignment);
-  order.assignedEmployee = {
-    id: employeeId,
-    name: employeeName,
-    phone: employeePhone,
-    assignTime: now
-  };
-  if (order.status === ORDER_STATUS.PENDING_ASSIGN) {
-    order.status = ORDER_STATUS.PENDING_DELIVER;
-  }
-  res.json({
-    code: 0,
-    message: action === '初次指派' ? '员工指派成功' : '员工更换成功',
-    data: order
-  });
+  const { employeeId, employeeName, employeePhone, operatorRole } = req.body || {};
+  const result = OrderService.assignStaff(
+    id,
+    { id: employeeId, name: employeeName, phone: employeePhone },
+    operatorRole || ROLE.STORE
+  );
+  handleServiceResult(res, result);
 });
 
 app.post('/api/orders/:id/hq-reassign', (req, res) => {
   const { id } = req.params;
-  const { targetStoreId } = req.body || {};
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  if (order.status !== ORDER_STATUS.ESCALATED_TO_HQ) {
-    return res.json({ code: 1, message: '订单状态不支持重新分配' });
-  }
-  if (!targetStoreId) {
-    return res.json({ code: 1, message: '请选择目标门店' });
-  }
-  order.storeId = targetStoreId;
-  order.status = ORDER_STATUS.PENDING_ACCEPT;
-  order.escalateReason = '';
-  order.assignedEmployee = null;
-  order.assignHistory = [];
-  const targetStore = mockStores.find(s => s.id === targetStoreId);
-  res.json({
-    code: 0,
-    message: `已重新分配至${targetStore ? targetStore.name : targetStoreId}`,
-    data: order
-  });
+  const { targetStoreId, operatorRole } = req.body || {};
+  const result = OrderService.hqReassign(id, targetStoreId, operatorRole || ROLE.HQ);
+  handleServiceResult(res, result);
 });
 
 app.post('/api/orders/:id/cancel', (req, res) => {
   const { id } = req.params;
-  const { reason } = req.body || {};
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  if (order.status === ORDER_STATUS.COMPLETED) {
-    return res.json({ code: 1, message: '已完成订单无法取消' });
-  }
-  order.status = ORDER_STATUS.CANCELLED;
-  order.cancelReason = reason || '总部操作取消';
-  res.json({
-    code: 0,
-    message: '订单已取消',
-    data: order
-  });
+  const { reason, operatorRole } = req.body || {};
+  const result = OrderService.cancelOrder(id, reason, operatorRole || ROLE.HQ);
+  handleServiceResult(res, result);
 });
 
 app.post('/api/orders/:id/deliver', (req, res) => {
   const { id } = req.params;
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  if (order.status !== ORDER_STATUS.PENDING_DELIVER) {
-    return res.json({ code: 1, message: '订单状态不支持发货' });
-  }
-  order.status = ORDER_STATUS.RENTING;
-  res.json({
-    code: 0,
-    message: '发货成功，订单进入租赁中',
-    data: order
-  });
+  const { operatorRole } = req.body || {};
+  const result = OrderService.deliverOrder(id, operatorRole || ROLE.STORE);
+  handleServiceResult(res, result);
 });
 
 app.post('/api/orders/:id/return', (req, res) => {
   const { id } = req.params;
-  const idx = findOrderIndex(id);
-  if (idx === -1) {
-    return res.json({ code: 1, message: '订单不存在' });
-  }
-  const order = mockOrders[idx];
-  if (order.status !== ORDER_STATUS.PENDING_RETURN) {
-    return res.json({ code: 1, message: '订单状态不支持退租' });
-  }
-  order.status = ORDER_STATUS.COMPLETED;
-  res.json({
-    code: 0,
-    message: '退租完成，订单已完结',
-    data: order
-  });
+  const { operatorRole } = req.body || {};
+  const result = OrderService.returnOrder(id, operatorRole || ROLE.STORE);
+  handleServiceResult(res, result);
 });
+
+app.post('/api/orders/:id/sale-ship', (req, res) => {
+  const { id } = req.params;
+  const { operatorRole } = req.body || {};
+  const result = OrderService.saleShip(id, operatorRole || ROLE.STORE);
+  handleServiceResult(res, result);
+});
+
+// ============================================================
+// 启动服务器
+// ============================================================
 
 app.listen(PORT, () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);
+  console.log('====== 重构模块说明 ======');
+  console.log('1. 常量模块: ORDER_TYPE, ORDER_STATUS, OPERATION_TYPE, RENT_STATUS_MAP, SALE_STATUS_MAP');
+  console.log('2. 状态机模块: OrderStateMachine (统一校验状态流转合法性)');
+  console.log('3. 操作日志模块: OperationLogService (完整审计追踪)');
+  console.log('4. 订单服务层: OrderService (接单/拒单/上报/指派/发货/退租/取消等核心逻辑)');
+  console.log('5. 路由层: 薄控制器，仅做参数解析和响应格式化');
+  console.log('6. 新增接口: /api/orders/:id/logs, /api/operation-logs, /api/orders/:id/transitions, /api/orders/:id/reject');
 });
