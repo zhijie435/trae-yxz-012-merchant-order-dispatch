@@ -251,7 +251,7 @@
       </div>
       <template #footer>
         <el-button @click="escalateDialogVisible = false">取消</el-button>
-        <el-button type="danger" :loading="escalateLoading" @click="confirmEscalate">
+        <el-button type="danger" :loading="escalateLoading" :disabled="!escalateForm.reason.trim()" @click="confirmEscalate">
           确认提交总部
         </el-button>
       </template>

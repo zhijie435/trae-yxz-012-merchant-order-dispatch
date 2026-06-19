@@ -645,8 +645,11 @@ app.post('/api/orders/:id/escalate-to-hq', (req, res) => {
   if (order.status !== ORDER_STATUS.PENDING_ACCEPT) {
     return res.json({ code: 1, message: '订单状态不支持提交总部' });
   }
+  if (!reason || !reason.trim()) {
+    return res.json({ code: 1, message: '请填写拒单原因' });
+  }
   order.status = ORDER_STATUS.ESCALATED_TO_HQ;
-  order.escalateReason = reason || '门店无法承接，请求总部协助';
+  order.escalateReason = reason.trim();
   res.json({
     code: 0,
     message: '已提交总部处理，请耐心等待',
